@@ -1,11 +1,8 @@
 (()=>{'use strict';
 const $=x=>document.getElementById(x),CW=46,RH=30,TAU=Math.PI*2;
 const info=[null,['박선옥','#5ef3bf','바람의 개척자'],['김영관','#ffbf73','운명의 전략가'],['강병갑','#9babff','번개의 정복자']];
-function avatar(i){
- const hair=i===2?'#713b31':'#181b29',tie=i===1?'#4679b2':i===2?'#9a4558':'#4e536a',glasses=i===2?'<g fill="none" stroke="#33252c" stroke-width="3"><rect x="25" y="43" width="21" height="15" rx="5"/><rect x="51" y="43" width="21" height="15" rx="5"/><path d="M46 48h5"/></g>':'';
- const svg='<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 130"><ellipse cx="50" cy="124" rx="30" ry="5" fill="#000" opacity=".19"/><path d="M20 78Q50 67 80 78L90 125H10Z" fill="#262d42" stroke="#101623" stroke-width="2"/><path d="M38 77L50 93L62 77L57 121H43Z" fill="white"/><path d="M47 89h6l7 27-10 11-10-11Z" fill="'+tie+'"/><path d="M19 82L40 72L35 102L51 122H23Z" fill="#353d53"/><path d="M81 82L60 72L65 102L49 122h28Z" fill="#353d53"/><ellipse cx="50" cy="46" rx="30" ry="35" fill="#ffd3b7" stroke="#a86e61" stroke-width="1.5"/><path d="M19 39Q10 5 49 8Q89 5 82 42Q64 18 53 25Q37 15 19 39Z" fill="'+hair+'"/><path d="M22 35Q29 14 45 22Q49 28 56 24Q41 33 22 35" fill="'+hair+'"/><ellipse cx="38" cy="51" rx="3" ry="4" fill="#27202d"/><ellipse cx="63" cy="51" rx="3" ry="4" fill="#27202d"/><path d="M44 67Q51 73 58 67" stroke="#a96767" stroke-width="2" fill="none"/>'+glasses+'</svg>';
- return 'data:image/svg+xml;charset=utf-8,'+encodeURIComponent(svg);
-}
+function avatar(i){ return ['/assets/unknown.svg','/assets/park.svg','/assets/kim.svg','/assets/kang.svg'][i] || '/assets/kang.svg'; }
+
 const P=info.map((p,i)=>p?{name:p[0],color:p[1],kind:p[2],img:avatar(i)}:null);
 const images=P.map(p=>{if(!p)return null;const a=new Image();a.src=p.img;return a});
 const layers=['homeLayer','lobbyLayer','upgradeLayer','resultLayer','reconnectLayer'],canvas=$('game'),ctx=canvas.getContext('2d');
