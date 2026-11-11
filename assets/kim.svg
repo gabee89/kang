@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="320" height="420" viewBox="0 0 240 310" role="img" aria-label="김영관 게임 캐릭터">
+ <defs><linearGradient id="suit" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#45516b"/><stop offset="1" stop-color="#1d2339"/></linearGradient><linearGradient id="shirt" x1="0" x2="1"><stop stop-color="#f7f9ff"/><stop offset="1" stop-color="#cbdaf4"/></linearGradient></defs>
+ <g stroke="#25273a" stroke-width="3.1" stroke-linejoin="round">
+ <path d="M85 228 L82 298 Q98 305 114 299 L120 245 L127 300 Q143 305 158 298 L155 227" fill="#293047"/>
+ <path d="M81 295 Q98 295 112 300 L114 306 H73 Q70 299 81 295Z M131 300 Q145 295 160 295 Q170 299 169 306 H128Z" fill="#1e2334"/>
+ <path d="M75 163 Q55 166 47 198 L39 242 Q47 253 62 249 L75 221 L75 244 L165 244 L166 218 L179 249 Q194 252 202 242 L193 197 Q182 165 165 163 Z" fill="url(#suit)"/>
+ <path d="M95 163 L120 196 L145 163 L137 231 H103Z" fill="url(#shirt)" stroke-width="2"/>
+ <path d="M119 189 L112 199 L120 223 L128 199 Z" fill="#8f4858" stroke-width="1.8"/>
+ <path d="M99 163 L118 199 L91 185 L103 208 L83 218 L75 163Z M141 163 L122 199 L149 185 L137 208 L157 218 L165 163Z" fill="#38445d"/>
+ <path d="M48 239 Q48 260 58 260 Q72 260 69 248 L63 238Z M179 239 Q171 250 182 259 Q194 262 198 243Z" fill="#ffddc7"/>
+ <path d="M106 151 V173 Q120 187 134 173 V151Z" fill="#ffddc7"/>
+ <ellipse cx="60" cy="111" rx="12" ry="19" fill="#ffddc7"/><ellipse cx="180" cy="111" rx="12" ry="19" fill="#ffddc7"/>
+ <ellipse cx="120" cy="110" rx="63" ry="69" fill="#ffddc7"/>
+ </g>
+ <path d="M70 116 Q84 89 107 103 M131 103 Q153 88 170 116" fill="none" stroke="#f1b7a5" stroke-width="2" opacity=".6"/>
+ <ellipse cx="92" cy="108" rx="9" ry="11" fill="#2b2630"/><ellipse cx="148" cy="108" rx="9" ry="11" fill="#2b2630"/><circle cx="95" cy="104" r="3" fill="white"/><circle cx="151" cy="104" r="3" fill="white"/><path d="M88 91 Q98 86 108 91 M132 91 Q143 86 154 91" fill="none" stroke="#67352c" stroke-width="4" stroke-linecap="round"/>
+ <ellipse cx="79" cy="127" rx="13" ry="6" fill="#f3a7a7" opacity=".22"/><ellipse cx="161" cy="127" rx="13" ry="6" fill="#f3a7a7" opacity=".22"/>
+ <path d="M107 142 Q120 151 133 142" fill="none" stroke="#b66f6b" stroke-width="2.5" stroke-linecap="round"/>
+ <path d="M58 104 Q48 49 80 35 Q115 11 155 36 Q190 38 182 106 Q177 82 162 60 Q151 75 131 74 Q114 87 92 71 Q78 96 58 104Z" fill="#67352c"/><path d="M71 56 Q118 13 160 43" fill="none" stroke="#9b5546" stroke-width="9" stroke-linecap="round"/><g fill="none" stroke="#332a35" stroke-width="3"><rect x="75" y="93" width="35" height="32" rx="10"/><rect x="130" y="93" width="35" height="32" rx="10"/><path d="M110 99 Q120 95 130 99 M75 101 L67 99 M165 101 L173 99"/></g>
+ <path d="M81 245H159" stroke="#59667a" stroke-width="2" opacity=".7"/>
+ </svg>
