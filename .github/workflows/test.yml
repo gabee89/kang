@@ -21,4 +21,6 @@ jobs:
       - run: node --check assets/actors.js
       - run: node --check assets/element-fx.js
       - run: node --check assets/ultimate-fx.js
+      - run: node --check assets/motion.js
+      - run: node test_motion.cjs
 
