@@ -23,6 +23,7 @@ DEX = [
 CATALOG = {d[0]: dict(zip(('dex', 'name', 'evolution', 'role', 'tier'), d)) for d in DEX}
 for dex, data in CATALOG.items():
     data.update(profile(dex))
+    data['ultimateMode']='melee' if data['ultimate']=='몸통박치기' else 'ranged'
     data['status'] = {'fire':'화상 · 강한 지속 피해', 'electric':'마비 · 잠시 정지', 'ice':'냉기 · 이동 -65%',
                       'water':'젖음 · 전기 피해 +25% / 이동 -35%', 'grass':'중독 · 최대 3중첩', 'ghost':'저주 · 받는 피해 +15%',
                       'psychic':'약점 노출 · 다음 공격 피해 +50%'}[data['role']]
@@ -59,6 +60,11 @@ def experience_need(unit):
     if not d['evolution']:
         return 0
     return 650 if d['lineLength']==2 else 400 if d['stage']==1 else 1000
+
+
+def weakness_multiplier(enemy,mode):
+    weakness=enemy.get('weakness')
+    return (1.6 if weakness==mode else .55) if weakness in ('melee','ranged') and mode in ('melee','ranged') else 1
 
 
 class Player:
@@ -285,7 +291,10 @@ class Room:
         hp = (55 + self.wave ** 2 * 18) * growth * DIFFICULTIES[self.difficulty] * (10 if boss_rank == 'boss' else 5 if boss else 1.8 if raid else 1)
         hp *= .7 if variant == 'runner' else 1.4 if variant == 'armored' else 1
         flank = self.wave>=4 and not boss and not golden and not raid and self.spawned%4==3
+        weakness = ('melee' if self.wave%10 else 'ranged') if boss else (
+            'melee' if self.wave>=3 and self.spawned%5==2 else 'ranged' if self.wave>=3 and self.spawned%5==4 else None)
         p.enemies.append({'id': self.uid, 'progress': 12.5 if flank else 0, 'flank':flank, 'hp': hp, 'maxHp': hp,
+                          'weakness':weakness,
                           'boss': boss, 'bossRank': boss_rank, 'dex': dex, 'name': name,
                           'variant': variant, 'shield': hp * .5 if variant == 'shielded' else 0,
                           'raid': raid, 'golden': golden, 'slow': 0, 'slowFactor':1,
@@ -330,14 +339,14 @@ class Room:
         p.effects = p.effects[-80:]
 
     @staticmethod
-    def hurt(e, damage):
-        dealt = damage * (.7 if e.get('variant') == 'armored' else 1) * (1.15 if e.get('curse',0)>0 else 1)
+    def hurt(e, damage, mode=None):
+        dealt = damage * weakness_multiplier(e,mode) * (.7 if e.get('variant') == 'armored' else 1) * (1.15 if e.get('curse',0)>0 else 1)
         blocked = min(e.get('shield',0), dealt)
         e['shield'] = max(0, e.get('shield',0) - blocked)
         e['hp'] -= dealt - blocked
 
     @staticmethod
-    def inflict(e, role, damage, special=False):
+    def inflict(e, role, damage, special=False, mode=None):
         if role in ('water','ice'):
             factor = max(.65 if e.get('boss') else .35, .35 if role == 'ice' else .65)
             e['slowFactor'] = min(e.get('slowFactor',1), factor) if e.get('slow',0)>0 else factor
@@ -346,10 +355,14 @@ class Room:
                 e['wet'] = 5 if special else 3
         elif role=='fire':
             e['burn'] = max(e.get('burn',0), 5 if special else 3)
+            if damage*.12>=e.get('burnDps',0):
+                e['burnMode']=mode
             e['burnDps'] = max(e.get('burnDps',0), damage*.12)
         elif role=='grass':
             e['poison'] = 5
             e['poisonStacks'] = min(3,e.get('poisonStacks',0)+(2 if special else 1))
+            if damage*.06>=e.get('poisonBase',0):
+                e['poisonMode']=mode
             e['poisonBase'] = max(e.get('poisonBase',0),damage*.06)
             e['poisonDps'] = e['poisonBase']*e['poisonStacks']
         elif role=='electric':
@@ -390,17 +403,18 @@ class Room:
                 hit = targets[:3] if d['mode'] == 'ranged' and d['role'] in ('fire', 'electric', 'psychic') else targets[:1]
             for e in hit:
                 bonus = (1.25 if d['role']=='electric' and e.get('wet',0)>0 else 1) * (1.5 if e.get('expose',0)>0 else 1)
-                self.hurt(e, damage * bonus)
+                mode=d['ultimateMode'] if special else d['mode']
+                self.hurt(e, damage * bonus,mode)
                 if e.get('expose',0)>0:
                     e['expose'] = 0
-                self.inflict(e, d['role'], damage, special)
+                self.inflict(e, d['role'], damage, special,mode)
             self.effect(p, u, 'ultimate' if special else 'attack', hit,
                         move=d['ultimate'] if special else d['move'], damage=round(damage), critical=critical)
         for e in p.enemies[:]:
             for key in ('burn','poison'):
                 remaining = e.get(key,0)
                 if remaining>0:
-                    self.hurt(e,e.get(key+'Dps',0)*min(dt,remaining))
+                    self.hurt(e,e.get(key+'Dps',0)*min(dt,remaining),e.get(key+'Mode'))
                     e[key] = max(0,remaining-dt)
                     if e[key] == 0:
                         e[key+'Dps'] = 0
