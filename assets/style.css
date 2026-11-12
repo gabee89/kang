@@ -10,3 +10,5 @@ select{background:#15251d;border:1px solid #53634a;color:#e9efce;border-radius:8
 
 .iv-stats{font-size:11px;line-height:1.8;color:#d4e8bb;background:#243726;border-radius:8px;padding:9px;margin:8px 0}.growth-info{font-size:11px;color:#ecdc9c;margin:8px 0}.xp-bar{height:5px;background:#153033;border-radius:5px;margin:10px 0 5px;overflow:hidden}.xp-bar i{display:block;height:100%;background:#b9d795}.xp-label{display:block;line-height:1.7}.odds{white-space:normal}
 
+.weakness-guide{font-size:10px;color:#bfd5cc;line-height:1.6;padding:8px 4px}@media(max-width:900px){.weakness-guide{font-size:9px;padding:6px 2px}}
+
