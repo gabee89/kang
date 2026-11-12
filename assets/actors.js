@@ -22,7 +22,7 @@ if(u.id===selected||terrain===d.role){c.strokeStyle=u.id===selected?'#eeff9e':co
 c.save();c.translate(x+pose.dx,y-9+pose.dy);c.rotate(pose.angle||0);const dex=pose.evolving&&pose.age<.38?pose.fromDex:u.dex;const white=pose.evolving?Math.max(0,Math.sin(pose.age*Math.PI))*.85:0;
 if(!sprite(c,dex,0,0,(map.spriteSize||62)*pose.scale,time,white)){c.fillStyle=color;c.beginPath();c.arc(0,0,17*pose.scale,0,Math.PI*2);c.fill();}c.restore();
 c.font='bold 9px sans-serif';c.strokeStyle='#15342c';c.lineWidth=3;c.strokeText(d.name+(u.enhance?' +'+u.enhance:''),x,y+26,w-3);c.fillStyle='#f5f8dc';c.fillText(d.name+(u.enhance?' +'+u.enhance:''),x,y+26,w-3);c.fillStyle='#112b2a';c.fillRect(x-w/2+5,y+31,w-10,4);c.fillStyle=u.energy>=100?'#fff4ae':'#8addff';c.fillRect(x-w/2+5,y+31,(w-10)*(u.energy||0)/100,4);
-c.font='bold 9px sans-serif';c.fillStyle=d.mode==='melee'?'#ffc387':'#a6dfff';c.fillText(d.mode==='melee'?'근':'원',x-w/2+7,y-25);c.fillStyle=Battlefield.palette[terrain];c.fillText(Battlefield.symbols[terrain],x+w/2-6,y-25);c.restore();}}
+c.fillStyle='#142c2ae6';c.fillRect(x-w/2+1,y-35,33,13);c.font='bold 8px sans-serif';c.fillStyle=d.mode==='melee'?'#ffc387':'#a6dfff';c.fillText(d.mode==='melee'?'근거리':'원거리',x-w/2+17,y-25);c.fillStyle=Battlefield.palette[terrain];c.fillText(Battlefield.symbols[terrain],x+w/2-6,y-25);c.restore();}}
 return{init,sprite,monsters,units,get ready(){return Object.values(images).filter(i=>i.naturalWidth).length;}};
 })();
 
