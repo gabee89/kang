@@ -6,6 +6,7 @@ import time
 import json
 from pathlib import Path
 from moves import profile
+from individuals import roll_ivs, iv_factor, attack_interval, iv_grade
 
 # id, Korean name, evolution, role, tier
 DEX = [
@@ -17,6 +18,7 @@ DEX = [
     (129, '잉어킹', 130, 'water', 1), (130, '갸라도스', None, 'water', 3),
     (144, '프리져', None, 'ice', 4), (145, '썬더', None, 'electric', 4),
     (146, '파이어', None, 'fire', 4), (150, '뮤츠', None, 'psychic', 4),
+    (131, '라프라스', None, 'ice', 2),
 ]
 CATALOG = {d[0]: dict(zip(('dex', 'name', 'evolution', 'role', 'tier'), d)) for d in DEX}
 for dex, data in CATALOG.items():
@@ -24,6 +26,10 @@ for dex, data in CATALOG.items():
     data['status'] = {'fire':'화상 · 강한 지속 피해', 'electric':'마비 · 잠시 정지', 'ice':'냉기 · 이동 -65%',
                       'water':'젖음 · 전기 피해 +25% / 이동 -35%', 'grass':'중독 · 최대 3중첩', 'ghost':'저주 · 받는 피해 +15%',
                       'psychic':'약점 노출 · 다음 공격 피해 +50%'}[data['role']]
+for line in ((1,2,3),(4,5,6),(7,8,9),(92,93,94),(25,26),(129,130),(131,),(144,),(145,),(146,),(150,)):
+    for stage,dex in enumerate(line):
+        CATALOG[dex].update({'lineLength':len(line),'stage':stage+1,
+                            'growthBonus':(1,1.3,1.9)[stage] if len(line)==3 else (1,1.8)[stage] if len(line)==2 else 1.2})
 WAVE_LENGTH = 20
 DIFFICULTIES = {'normal': .8, 'challenge': 1.25, 'extreme': 1.8}
 MAP = json.loads((Path(__file__).parent / 'assets' / 'map.json').read_text(encoding='utf-8'))
@@ -43,7 +49,16 @@ def attack_damage(unit, level=0, special=False):
     d = CATALOG[unit['dex']]
     return (8 * 2.3 ** (d['tier']-1) * unit['power'] * (1+.18*level) * d['damageMultiplier']
             * terrain_multiplier(unit['dex'],unit['cell']) * (1+.4*unit.get('enhance',0))
+            * d['growthBonus'] * (1+.15*unit.get('evolutions',0))
+            * iv_factor(unit,'special' if special and d['ultimate']!='몸통박치기' or not special and d['mode']=='ranged' else 'attack')
             * (d['ultimatePower'] if special else d['movePower']))
+
+
+def experience_need(unit):
+    d=CATALOG[unit['dex']]
+    if not d['evolution']:
+        return 0
+    return 650 if d['lineLength']==2 else 400 if d['stage']==1 else 1000
 
 
 class Player:
@@ -64,7 +79,9 @@ class Player:
                 'raidReady': round(self.raid_ready, 1),
                 'units': [{**{k: v for k, v in u.items() if k != 'cooldown'}, 'sellValue': sell_value(u),
                            'attackDamage':round(attack_damage(u,self.level),1),
-                           'ultimateDamage':round(attack_damage(u,self.level,True),1)} for u in self.units],
+                           'ultimateDamage':round(attack_damage(u,self.level,True),1),
+                           'attackInterval':round(attack_interval(u,CATALOG),3),'ivGrade':iv_grade(u),
+                           'xpNeed':experience_need(u)} for u in self.units],
                 'enemies': [{k: v for k, v in e.items() if k not in ('burnDps','poisonDps','paraImmune')} for e in self.enemies],
                 'effects': self.effects}
 
@@ -166,11 +183,16 @@ class Room:
             return '소환에는 40코인이 필요해요.'
         if not free:
             p.gold -= 40
-        tier = random.choices((1, 2, 3, 4), weights=(70, 23, 6, 1))[0]
-        dex = random.choice([d for d in CATALOG.values() if d['tier'] == tier])
+        group = random.choices(('base','middle','final','legendary'),weights=(96,3,.7,.3))[0]
+        if group=='base':
+            dex_id=random.choices((1,4,7,92,129,25,131),weights=(18,18,18,16,16,10,4))[0]
+        else:
+            dex_id=random.choice({'middle':(2,5,8,93),'final':(3,6,9,26,94,130),'legendary':(144,145,146,150)}[group])
+        dex=CATALOG[dex_id]
         cell = next(i for i in range(MAX_UNITS) if all(u['cell'] != i for u in p.units))
         self.uid += 1
-        p.units.append({'id': self.uid, 'dex': dex['dex'], 'cell': cell, 'power': 1, 'cooldown': 0, 'energy': 0, 'enhance':0})
+        p.units.append({'id': self.uid, 'dex': dex['dex'], 'cell': cell, 'power': 1, 'cooldown': 0, 'energy': 0,
+                        'enhance':0,'ivs':roll_ivs(),'xp':0,'evolutions':0,'source':group})
 
     def action(self, p, data):
         if self.phase != 'playing' or p.hp <= 0:
@@ -223,11 +245,14 @@ class Room:
                 return f'같은 포켓몬·같은 강화 단계 {required}마리가 필요해요.'
             if u.get('enhance',0) >= 10:
                 return '최대 합성 단계입니다.'
-            for v in [v for v in same if v is not u][:required-1]:
+            materials=[v for v in same if v is not u][:required-1]
+            u['xp']=u.get('xp',0)+sum(v.get('xp',0) for v in materials)
+            for v in materials:
                 p.units.remove(v)
             previous_dex = u['dex']
             if evolution:
                 u['dex'] = evolution
+                u['evolutions']=u.get('evolutions',0)+1
             else:
                 u['enhance'] = u.get('enhance',0)+1
             u['energy'], u['cooldown'] = 0, .5
@@ -280,6 +305,20 @@ class Room:
     @staticmethod
     def path_speed(progress):
         return next((z['speed'] for z in MAP['zones'] if z['start'] <= progress < z['end']), 1)
+
+    def gain_experience(self,p):
+        # One point per kill for each deployed unit; never controlled by the client.
+        for u in p.units:
+            u['xp']=u.get('xp',0)+1
+            need=experience_need(u)
+            if need and u['xp']>=need:
+                old=u['dex']
+                u['xp']-=need
+                u['dex']=CATALOG[old]['evolution']
+                u['evolutions']=u.get('evolutions',0)+1
+                u['cooldown']=.5
+                u['energy']=0
+                self.effect(p,u,'evolve',[],move=CATALOG[u['dex']]['name'],fromDex=old,reason='experience')
 
     def effect(self, p, u, kind, targets, **extra):
         self.effect_seq += 1
@@ -338,7 +377,7 @@ class Room:
                              key=lambda e: e['progress'], reverse=True)
             if not targets:
                 continue
-            u['cooldown'] = d['interval']
+            u['cooldown'] = attack_interval(u,CATALOG)
             damage = attack_damage(u,p.level,special)
             critical = random.random() < .15
             if critical:
@@ -371,6 +410,7 @@ class Room:
                 p.enemies.remove(e)
                 p.gold += (60 if e.get('bossRank') == 'boss' else 25 if e['boss'] else 5) + (25 if e.get('golden') else 0)
                 p.kills += 1
+                self.gain_experience(p)
                 continue
             e['slow'] = max(0, e['slow'] - dt)
             immobilized = e.get('stun',0)>0

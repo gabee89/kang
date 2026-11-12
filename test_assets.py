@@ -9,7 +9,7 @@ class AssetTests(unittest.TestCase):
     def test_local_animation_atlases_are_complete_pngs(self):
         root=Path(__file__).parent/'assets'/'sprites'
         manifest=json.loads((root/'manifest.json').read_text())
-        self.assertEqual(len(manifest),31)
+        self.assertEqual(len(manifest),32)
         for dex in set(CATALOG)|{19,41,46,74,23,48,66,111,52,95,149}:
             item=manifest[str(dex)]
             self.assertGreater(item['frames'],1)
