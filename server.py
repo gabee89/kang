@@ -95,7 +95,7 @@ async def websocket_handler(request):
                     await room.send_to(participant, {'type': 'error', 'message': error})
                 else:
                     await room.broadcast_room()
-            elif typ in ('summon', 'merge', 'move', 'upgrade', 'raid', 'sell', 'speed'):
+            elif typ in ('summon', 'merge', 'move', 'upgrade', 'raid', 'sell', 'speed', 'luck'):
                 error = room.action(participant, payload)
                 if error:
                     await room.send_to(participant, {'type': 'error', 'message': error})

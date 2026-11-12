@@ -37,7 +37,8 @@ def profile(dex):
                       '10만볼트':3.2,'번개':4.6,'섀도볼':4,'몸통박치기':3,'파괴광선':6,
                       '눈보라':3.8,'사이코키네시스':4.5}[ultimate]
     return {'mode': mode, 'move': move, 'ultimate': ultimate, 'style': style,
-            'range': 2.15 if mode == 'melee' else 4.4,
+            'range': 2.1 if mode == 'melee' else 3.9,
+            'ultimateRange': 3.25 if mode == 'melee' else 5.05,
             'damageMultiplier': 1.9 if mode == 'melee' else 1,
             'movePower':power, 'ultimatePower':ultimate_power, 'interval':interval}
 

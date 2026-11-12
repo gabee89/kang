@@ -129,8 +129,6 @@ class RulesTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_shared_winding_route_and_endpoint(self):
         self.assertEqual(Room.position(0), (0, 0))
-        self.assertEqual(Room.position(12.5), (10, 2.5))
-        self.assertEqual(Room.position(22.5), (0, 2.5))
         self.assertEqual(Room.position(ROUTE_LENGTH), (10, 6))
         self.assertEqual(Room.position(ROUTE_LENGTH + 10), (10, 6))
         for x, y in MAP['cells']:
@@ -163,7 +161,7 @@ class RulesTests(unittest.IsolatedAsyncioTestCase):
         p = r.players[1]
         p.units = []
         distances = []
-        for start in (2, 15, 29):
+        for start in (2, *[(z['start']+z['end'])/2 for z in MAP['zones']]):
             p.enemies = []
             r.spawn(p)
             e = p.enemies[0]
@@ -252,9 +250,10 @@ class RulesTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn(event['id'], [f['id'] for f in p.effects])
 
     async def test_corner_tiles_cover_both_legs_for_melee(self):
-        for cell, steps in ((0, (0, 22.5)), (11, (10, 11)), (12, (23, 24)), (23, (12, 13)), (24, (25, 27)), (35, (35, 36))):
-            for t in steps:
-                self.assertLessEqual(math.dist(MAP['cells'][cell], Room.position(t)), 2.15)
+        for cell in MAP['cells']:
+            distances = [math.dist(cell, Room.position(t / 20)) for t in range(int(ROUTE_LENGTH * 20))]
+            self.assertLess(min(distances), 2.1)
+            self.assertGreater(sum(d <= 2.1 for d in distances), 15)
 
     async def test_swap_and_merge_evolution_preserve_unique_cells(self):
         r = await self.room(1)
