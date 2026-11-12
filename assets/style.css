@@ -2,3 +2,5 @@
 
 .map-legend{display:grid;gap:7px;margin-top:14px;padding:12px 14px;border:1px solid #607552;border-radius:9px;background:#2b3b28;font-size:10px;color:#cfddbd}.map-legend b{font-size:12px;color:#e7ecce}.map-legend span{line-height:1.6}
 
+.energy{height:7px;border-radius:8px;background:#10232b;overflow:hidden;margin:12px 0 5px}.energy i{display:block;height:100%;background:linear-gradient(90deg,#58b3d3,#e2f8a3);transition:width .1s}.move-info{font-size:11px;color:#d1e9e6;line-height:1.7}.selected small{font-size:10px}.evolution-info{font-size:11px;color:#e6dd9c}.selected .selection-card{min-height:80px}
+

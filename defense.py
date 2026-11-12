@@ -5,6 +5,7 @@ import secrets
 import time
 import json
 from pathlib import Path
+from moves import profile
 
 # id, Korean name, evolution, role, tier
 DEX = [
@@ -18,6 +19,8 @@ DEX = [
     (146, '파이어', None, 'fire', 4), (150, '뮤츠', None, 'psychic', 4),
 ]
 CATALOG = {d[0]: dict(zip(('dex', 'name', 'evolution', 'role', 'tier'), d)) for d in DEX}
+for dex, data in CATALOG.items():
+    data.update(profile(dex))
 MAX_UNITS = 12
 WAVE_LENGTH = 24
 MAP = json.loads((Path(__file__).parent / 'assets' / 'map.json').read_text(encoding='utf-8'))
@@ -57,6 +60,7 @@ class Room:
         self.created = self.last_active = time.monotonic()
         self.last_broadcast, self.seq, self.uid, self.spawned = 0, 0, 0, 0
         self.participants = 0
+        self.effect_seq = 0
 
     def connected(self):
         return [p for p in self.players.values() if p.ws is not None and not p.ws.closed]
@@ -137,7 +141,7 @@ class Room:
         dex = random.choice([d for d in CATALOG.values() if d['tier'] == tier])
         cell = next(i for i in range(MAX_UNITS) if all(u['cell'] != i for u in p.units))
         self.uid += 1
-        p.units.append({'id': self.uid, 'dex': dex['dex'], 'cell': cell, 'power': 1, 'cooldown': 0})
+        p.units.append({'id': self.uid, 'dex': dex['dex'], 'cell': cell, 'power': 1, 'cooldown': 0, 'energy': 0})
 
     def action(self, p, data):
         if self.phase != 'playing' or p.hp <= 0:
@@ -180,6 +184,8 @@ class Room:
                 u['dex'] = evolution
             else:
                 u['power'] *= 2
+            u['energy'], u['cooldown'] = 0, .5
+            self.effect(p, u, 'evolve', [], move=CATALOG[u['dex']]['name'])
         elif typ == 'raid':
             targets = [v for v in self.players.values() if v is not p and v.hp > 0]
             if not targets:
@@ -213,31 +219,50 @@ class Room:
     def path_speed(progress):
         return next((z['speed'] for z in MAP['zones'] if z['start'] <= progress < z['end']), 1)
 
+    def effect(self, p, u, kind, targets, **extra):
+        self.effect_seq += 1
+        d = CATALOG[u['dex']]
+        p.effects.append({'id': self.effect_seq, 'kind': kind, 'unit': u['id'], 'cell': u['cell'],
+                          'dex': u['dex'], 'role': d['role'], 'mode': d['mode'], 'style': d['style'],
+                          'created': self.seconds, 'targets': [e['progress'] for e in targets],
+                          'victims': [e['id'] for e in targets], **extra})
+        p.effects = p.effects[-80:]
+
     def simulate(self, p, dt):
-        p.effects = []
+        p.effects = [f for f in p.effects if self.seconds - f['created'] < 1.7]
         p.raid_ready = max(0, p.raid_ready - dt)
         for u in p.units:
+            u['energy'] = min(100, u.get('energy', 0) + dt * 7)
             u['cooldown'] -= dt
-            if u['cooldown'] > 0:
-                continue
             d = CATALOG[u['dex']]
             x, y = MAP['cells'][u['cell']]
-            targets = sorted((e for e in p.enemies if e['hp'] > 0 and math.dist((x, y), self.position(e['progress'])) <= 4.4),
+            special = u['energy'] >= 100
+            if u['cooldown'] > 0 and not special:
+                continue
+            attack_range = d['range'] + (1.4 if special else 0)
+            targets = sorted((e for e in p.enemies if e['hp'] > 0 and math.dist((x, y), self.position(e['progress'])) <= attack_range),
                              key=lambda e: e['progress'], reverse=True)
             if not targets:
                 continue
-            u['cooldown'] = .7 if d['role'] == 'electric' else 1.0
+            u['cooldown'] = d['interval']
             damage = (8 * 2.3 ** (d['tier'] - 1)) * u['power'] * (1 + .18 * p.level)
-            damage *= terrain_multiplier(u['dex'], u['cell'])
+            damage *= terrain_multiplier(u['dex'], u['cell']) * d['damageMultiplier']
             critical = random.random() < .15
             if critical:
                 damage *= 2
-            hit = targets[:3] if d['role'] in ('fire', 'electric', 'psychic') else targets[:1]
+            if special:
+                u['energy'] = 0
+                damage *= 3.5
+                hit = targets[:8]
+            else:
+                u['energy'] = min(100, u['energy'] + 18)
+                hit = targets[:3] if d['mode'] == 'ranged' and d['role'] in ('fire', 'electric', 'psychic') else targets[:1]
             for e in hit:
                 e['hp'] -= damage
                 if d['role'] in ('water', 'ice', 'grass'):
-                    e['slow'] = 1.4
-                p.effects.append({'unit': u['id'], 'progress': e['progress'], 'role': d['role'], 'critical': critical})
+                    e['slow'] = 3 if special else 1.4
+            self.effect(p, u, 'ultimate' if special else 'attack', hit,
+                        move=d['ultimate'] if special else d['move'], damage=round(damage), critical=critical)
         for e in p.enemies[:]:
             if e['hp'] <= 0:
                 p.enemies.remove(e)

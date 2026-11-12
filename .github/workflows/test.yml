@@ -17,4 +17,5 @@ jobs:
       - run: python -m unittest discover -v
       - run: node --check assets/client.js
       - run: node --check assets/battlefield.js
+      - run: node --check assets/combat-fx.js
 

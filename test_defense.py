@@ -4,7 +4,7 @@ import unittest
 import math
 from unittest.mock import patch
 from aiohttp.test_utils import TestClient, TestServer
-from defense import Room, ROUTE_LENGTH, terrain_multiplier, MAP
+from defense import Room, ROUTE_LENGTH, terrain_multiplier, MAP, CATALOG
 from server import create_app, ROOMS
 
 
@@ -151,7 +151,7 @@ class RulesTests(unittest.IsolatedAsyncioTestCase):
             p.enemies = []
             r.spawn(p)
             e = p.enemies[0]
-            e['progress'] = 3
+            e['progress'] = 2
             before = e['hp']
             with patch('defense.random.random', return_value=1):
                 r.simulate(p, .01)
@@ -187,6 +187,88 @@ class RulesTests(unittest.IsolatedAsyncioTestCase):
         r.simulate(p, .1)
         self.assertEqual(p.gold - before, 30)
 
+    async def test_melee_range_and_damage_vs_ranged(self):
+        r = await self.room(1)
+        p = r.players[1]
+        damage = []
+        # Same-tier Charmeleon and Ivysaur, same neutral tile and target.
+        for dex in (5, 2):
+            p.units = [{'id': 100, 'dex': dex, 'cell': 1, 'power': 1, 'cooldown': 0}]
+            p.enemies = []
+            r.spawn(p)
+            e = p.enemies[0]
+            e['hp'] = e['maxHp'] = 1000
+            e['progress'] = 4
+            with patch('defense.random.random', return_value=1):
+                r.simulate(p, .01)
+            damage.append(1000 - e['hp'])
+        self.assertAlmostEqual(damage[0] / damage[1], 1.9)
+        self.assertLess(CATALOG[5]['range'], CATALOG[2]['range'])
+        for dex in (5, 2):
+            p.units = [{'id': 100, 'dex': dex, 'cell': 1, 'power': 1, 'cooldown': 0}]
+            p.enemies = []
+            r.spawn(p)
+            e = p.enemies[0]
+            e['hp'] = 1000
+            e['progress'] = 7
+            r.simulate(p, .01)
+            self.assertEqual(e['hp'] < 1000, dex == 2)
+
+    async def test_full_gauge_waits_for_target_then_casts_once(self):
+        r = await self.room(1)
+        p = r.players[1]
+        u = {'id': 100, 'dex': 25, 'cell': 0, 'power': 1, 'cooldown': 0, 'energy': 100}
+        p.units, p.enemies = [u], []
+        r.simulate(p, .1)
+        self.assertEqual(u['energy'], 100)
+        r.spawn(p)
+        e = p.enemies[0]
+        e['hp'] = e['maxHp'] = 10000
+        r.simulate(p, .1)
+        self.assertEqual(u['energy'], 0)
+        casts = [f for f in p.effects if f['kind'] == 'ultimate']
+        self.assertEqual(len(casts), 1)
+        self.assertEqual(casts[0]['move'], '10만볼트')
+        self.assertGreater(10000 - e['hp'], 18.4 * 3)
+        r.simulate(p, .1)
+        self.assertEqual(len([f for f in p.effects if f['kind'] == 'ultimate']), 1)
+
+    async def test_gauge_charges_and_events_survive_snapshot_gap(self):
+        r = await self.room(1)
+        p = r.players[1]
+        p.units = [{'id': 100, 'dex': 1, 'cell': 0, 'power': 1, 'cooldown': 0, 'energy': 0}]
+        r.spawn(p)
+        p.enemies[0]['hp'] = 10000
+        r.simulate(p, .05)
+        self.assertGreater(p.units[0]['energy'], 18)
+        event = p.effects[0]
+        self.assertEqual(event['kind'], 'attack')
+        r.seconds += .1
+        r.simulate(p, .05)
+        self.assertIn(event['id'], [f['id'] for f in p.public()['effects']])
+        r.seconds += 2
+        p.enemies = []
+        r.simulate(p, .05)
+        self.assertNotIn(event['id'], [f['id'] for f in p.effects])
+
+    async def test_corner_tiles_cover_both_legs_for_melee(self):
+        for cell, steps in ((0, (0, 22.5)), (3, (10, 11)), (4, (23, 24)), (7, (12, 13)), (8, (25, 27)), (11, (35, 36))):
+            for t in steps:
+                self.assertLessEqual(math.dist(MAP['cells'][cell], Room.position(t)), 2.15)
+
+    async def test_swap_and_merge_evolution_preserve_unique_cells(self):
+        r = await self.room(1)
+        p = r.players[1]
+        p.units = [{'id': i + 100, 'dex': 1, 'cell': i, 'power': 1, 'cooldown': 0, 'energy': 90} for i in range(3)]
+        self.assertIsNone(self.action(r, p, type='move', id=100, cell=1))
+        self.assertEqual([u['cell'] for u in p.units], [1, 0, 2])
+        self.assertIsNone(self.action(r, p, type='merge', id=100))
+        u = p.units[0]
+        self.assertEqual((len(p.units), u['dex'], u['cell'], u['energy']), (1, 2, 1, 0))
+        self.assertEqual(CATALOG[u['dex']]['mode'], 'ranged')
+        self.assertEqual(p.effects[-1]['kind'], 'evolve')
+        self.assertEqual(p.effects[-1]['move'], '이상해풀')
+
 
 class NetworkTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
@@ -205,7 +287,7 @@ class NetworkTests(unittest.IsolatedAsyncioTestCase):
         self.fail('missing ' + kind)
 
     async def test_http_and_three_independent_websockets(self):
-        for path in ('/', '/assets/client.js', '/assets/battlefield.js', '/assets/map.json', '/assets/style.css', '/api/catalog', '/api/health'):
+        for path in ('/', '/assets/client.js', '/assets/battlefield.js', '/assets/combat-fx.js', '/assets/map.json', '/assets/style.css', '/api/catalog', '/api/health'):
             self.assertEqual((await self.client.get(path)).status, 200)
         response = await self.client.post('/api/rooms')
         code = (await response.json())['code']
@@ -223,6 +305,26 @@ class NetworkTests(unittest.IsolatedAsyncioTestCase):
             d = await self.receive(ws, 'state')
             self.assertEqual(d['phase'], 'playing')
             self.assertEqual(len(d['players']), 3)
+        # Another socket cannot move the first player's unit, and cannot forge energy.
+        room = ROOMS[code]
+        first = room.players[1]
+        original = first.units[0]['cell']
+        await sockets[1].send_json({'type': 'move', 'id': first.units[0]['id'], 'cell': 11, 'energy':100})
+        self.assertEqual((await self.receive(sockets[1], 'error'))['message'], '포켓몬을 선택해 주세요.')
+        self.assertEqual(first.units[0]['cell'], original)
+        self.assertLess(first.units[0]['energy'], 100)
+        # A cast is serialized into the shared snapshot for all three clients.
+        first.units[0]['energy'] = 100
+        room.spawn(first)
+        first.enemies[-1]['hp'] = 10000
+        await room.tick(.05)
+        for ws in sockets:
+            for _ in range(30):
+                snapshot = await self.receive(ws, 'state')
+                if any(e['kind'] == 'ultimate' for p in snapshot['players'] for e in p['effects']):
+                    break
+            else:
+                self.fail('ultimate was not synchronized')
         await sockets[0].close()
         reconnect = await self.client.ws_connect('/ws?room=' + code)
         await reconnect.send_json({'type': 'join', 'token': joined[0]['token']})
