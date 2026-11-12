@@ -4,6 +4,7 @@ import random
 import secrets
 import time
 import json
+from bisect import bisect_right
 from pathlib import Path
 from moves import profile
 from individuals import roll_ivs, iv_factor, attack_interval, iv_grade
@@ -36,6 +37,21 @@ DIFFICULTIES = {'normal': .8, 'challenge': 1.25, 'extreme': 1.8}
 MAP = json.loads((Path(__file__).parent / 'assets' / 'map.json').read_text(encoding='utf-8'))
 MAX_UNITS = len(MAP['cells'])
 ROUTE_LENGTH = sum(math.dist(a, b) for a, b in zip(MAP['route'], MAP['route'][1:]))
+ROUTE_CUMULATIVE=[0]
+for a,b in zip(MAP['route'],MAP['route'][1:]):
+    ROUTE_CUMULATIVE.append(ROUTE_CUMULATIVE[-1]+math.dist(a,b))
+
+
+def summon_odds(level=0):
+    level=max(0,min(5,level))
+    middle=3+level*1.4
+    final=.7+level*.55
+    legendary=.3+level*.15
+    return {'base':100-middle-final-legendary,'middle':middle,'final':final,'legendary':legendary}
+
+
+def luck_cost(level):
+    return 100+level*90
 
 
 def terrain_multiplier(dex, cell):
@@ -76,6 +92,7 @@ class Player:
         self.eliminated_at = None
         self.last_action = -100
         self.raid_ready = 0
+        self.luck_level = 0
 
     def public(self):
         return {'id': self.slot, 'name': f'트레이너 {self.slot}', 'hp': self.hp,
@@ -83,6 +100,8 @@ class Player:
                 'connected': self.ws is not None and not self.ws.closed,
                 'alive': self.hp > 0, 'eliminatedAt': self.eliminated_at,
                 'raidReady': round(self.raid_ready, 1),
+                'luckLevel':self.luck_level,'luckCost':luck_cost(self.luck_level),
+                'summonOdds':summon_odds(self.luck_level),
                 'units': [{**{k: v for k, v in u.items() if k != 'cooldown'}, 'sellValue': sell_value(u),
                            'attackDamage':round(attack_damage(u,self.level),1),
                            'ultimateDamage':round(attack_damage(u,self.level,True),1),
@@ -189,7 +208,8 @@ class Room:
             return '소환에는 40코인이 필요해요.'
         if not free:
             p.gold -= 40
-        group = random.choices(('base','middle','final','legendary'),weights=(96,3,.7,.3))[0]
+        odds=summon_odds(p.luck_level)
+        group = random.choices(tuple(odds),weights=tuple(odds.values()))[0]
         if group=='base':
             dex_id=random.choices((1,4,7,92,129,25,131),weights=(18,18,18,16,16,10,4))[0]
         else:
@@ -225,6 +245,15 @@ class Room:
             return None
         if typ == 'summon':
             return self.summon(p)
+        if typ == 'luck':
+            cost=luck_cost(p.luck_level)
+            if p.luck_level>=5:
+                return '소환 행운이 최대 단계입니다.'
+            if p.gold<cost:
+                return f'소환 행운 강화에 {cost}코인이 필요해요.'
+            p.gold-=cost
+            p.luck_level+=1
+            return None
         if typ == 'upgrade':
             cost = 70 + p.level * 40
             if p.level >= 10 or p.gold < cost:
@@ -293,7 +322,7 @@ class Room:
         flank = self.wave>=4 and not boss and not golden and not raid and self.spawned%4==3
         weakness = ('melee' if self.wave%10 else 'ranged') if boss else (
             'melee' if self.wave>=3 and self.spawned%5==2 else 'ranged' if self.wave>=3 and self.spawned%5==4 else None)
-        p.enemies.append({'id': self.uid, 'progress': 12.5 if flank else 0, 'flank':flank, 'hp': hp, 'maxHp': hp,
+        p.enemies.append({'id': self.uid, 'progress': MAP.get('flankProgress',12.5) if flank else 0, 'flank':flank, 'hp': hp, 'maxHp': hp,
                           'weakness':weakness,
                           'boss': boss, 'bossRank': boss_rank, 'dex': dex, 'name': name,
                           'variant': variant, 'shield': hp * .5 if variant == 'shielded' else 0,
@@ -303,13 +332,15 @@ class Room:
 
     @staticmethod
     def position(progress):
-        t = max(0, min(ROUTE_LENGTH, progress))
-        for a, b in zip(MAP['route'], MAP['route'][1:]):
-            length = math.dist(a, b)
-            if t <= length:
-                return a[0] + (b[0] - a[0]) * t / length, a[1] + (b[1] - a[1]) * t / length
-            t -= length
-        return tuple(MAP['route'][-1])
+        if progress <= 0:
+            return tuple(MAP['route'][0])
+        if progress >= ROUTE_LENGTH:
+            return tuple(MAP['route'][-1])
+        t = progress
+        i=min(len(MAP['route'])-2,max(0,bisect_right(ROUTE_CUMULATIVE,t)-1))
+        a,b=MAP['route'][i:i+2]
+        fraction=(t-ROUTE_CUMULATIVE[i])/(ROUTE_CUMULATIVE[i+1]-ROUTE_CUMULATIVE[i])
+        return a[0]+(b[0]-a[0])*fraction,a[1]+(b[1]-a[1])*fraction
 
     @staticmethod
     def path_speed(progress):
@@ -385,7 +416,7 @@ class Room:
             special = u['energy'] >= 100
             if u['cooldown'] > 0 and not special:
                 continue
-            attack_range = d['range'] + (1.4 if special else 0)
+            attack_range = d['ultimateRange'] if special else d['range']
             targets = sorted((e for e in p.enemies if e['hp'] > 0 and math.dist((x, y), self.position(e['progress'])) <= attack_range),
                              key=lambda e: e['progress'], reverse=True)
             if not targets:
