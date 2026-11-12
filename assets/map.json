@@ -1,0 +1,12 @@
+{
+  "name": "상록 숲 · 바람의 샛길",
+  "route": [[0,0],[10,0],[10,2.5],[0,2.5],[0,6],[10,6]],
+  "cells": [[2,1.2],[4,1.2],[6,1.2],[8,1.2],[2,3.7],[4,3.7],[6,3.7],[8,3.7],[2,4.9],[4,4.9],[6,4.9],[8,4.9]],
+  "terrain": ["grass","neutral","fire","water","grass","electric","neutral","water","neutral","fire","electric","water"],
+  "zones": [
+    {"name":"진흙길", "start":14,"end":18,"speed":0.65,"color":"#a58455"},
+    {"name":"바람길", "start":28,"end":32,"speed":1.35,"color":"#c9e7af"}
+  ],
+  "terrainBonus": 1.25
+}
+

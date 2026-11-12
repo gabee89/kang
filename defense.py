@@ -3,6 +3,8 @@ import math
 import random
 import secrets
 import time
+import json
+from pathlib import Path
 
 # id, Korean name, evolution, role, tier
 DEX = [
@@ -18,6 +20,12 @@ DEX = [
 CATALOG = {d[0]: dict(zip(('dex', 'name', 'evolution', 'role', 'tier'), d)) for d in DEX}
 MAX_UNITS = 12
 WAVE_LENGTH = 24
+MAP = json.loads((Path(__file__).parent / 'assets' / 'map.json').read_text(encoding='utf-8'))
+ROUTE_LENGTH = sum(math.dist(a, b) for a, b in zip(MAP['route'], MAP['route'][1:]))
+
+
+def terrain_multiplier(dex, cell):
+    return MAP['terrainBonus'] if CATALOG[dex]['role'] == MAP['terrain'][cell] else 1
 
 
 class Player:
@@ -185,23 +193,25 @@ class Room:
             for target in targets:
                 self.spawn(target, raid=True)
 
-    def spawn(self, p, raid=False, boss=False):
+    def spawn(self, p, raid=False, boss=False, golden=False):
         self.uid += 1
         hp = (22 + self.wave ** 1.55 * 9) * (5 if boss else 1.8 if raid else 1)
         p.enemies.append({'id': self.uid, 'progress': 0, 'hp': hp, 'maxHp': hp,
-                          'boss': boss, 'raid': raid, 'slow': 0})
+                          'boss': boss, 'raid': raid, 'golden': golden, 'slow': 0})
 
     @staticmethod
     def position(progress):
-        # Clockwise rectangular route around a 4x3 placement grid.
-        t = min(31.99, progress)
-        if t < 10:
-            return t, 0
-        if t < 16:
-            return 10, t - 10
-        if t < 26:
-            return 26 - t, 6
-        return 0, 32 - t
+        t = max(0, min(ROUTE_LENGTH, progress))
+        for a, b in zip(MAP['route'], MAP['route'][1:]):
+            length = math.dist(a, b)
+            if t <= length:
+                return a[0] + (b[0] - a[0]) * t / length, a[1] + (b[1] - a[1]) * t / length
+            t -= length
+        return tuple(MAP['route'][-1])
+
+    @staticmethod
+    def path_speed(progress):
+        return next((z['speed'] for z in MAP['zones'] if z['start'] <= progress < z['end']), 1)
 
     def simulate(self, p, dt):
         p.effects = []
@@ -211,13 +221,14 @@ class Room:
             if u['cooldown'] > 0:
                 continue
             d = CATALOG[u['dex']]
-            x, y = 2 + u['cell'] % 4 * 2, 1.5 + u['cell'] // 4 * 1.5
+            x, y = MAP['cells'][u['cell']]
             targets = sorted((e for e in p.enemies if e['hp'] > 0 and math.dist((x, y), self.position(e['progress'])) <= 4.4),
                              key=lambda e: e['progress'], reverse=True)
             if not targets:
                 continue
             u['cooldown'] = .7 if d['role'] == 'electric' else 1.0
             damage = (8 * 2.3 ** (d['tier'] - 1)) * u['power'] * (1 + .18 * p.level)
+            damage *= terrain_multiplier(u['dex'], u['cell'])
             critical = random.random() < .15
             if critical:
                 damage *= 2
@@ -230,12 +241,12 @@ class Room:
         for e in p.enemies[:]:
             if e['hp'] <= 0:
                 p.enemies.remove(e)
-                p.gold += 16 if e['boss'] else 5
+                p.gold += (16 if e['boss'] else 5) + (25 if e.get('golden') else 0)
                 p.kills += 1
                 continue
             e['slow'] = max(0, e['slow'] - dt)
-            e['progress'] += dt * (1.25 + min(.85, self.wave * .025)) * (.55 if e['slow'] else 1)
-            if e['progress'] >= 32:
+            e['progress'] += dt * (1.25 + min(.85, self.wave * .025)) * (.55 if e['slow'] else 1) * self.path_speed(e['progress'])
+            if e['progress'] >= ROUTE_LENGTH:
                 p.enemies.remove(e)
                 p.hp = max(0, p.hp - (5 if e['boss'] else 2 if e['raid'] else 1))
         if p.hp <= 0:
@@ -282,7 +293,8 @@ class Room:
             while self.spawned < wanted:
                 for p in self.players.values():
                     if p.hp > 0:
-                        self.spawn(p, boss=self.wave % 5 == 0 and self.spawned == 0)
+                        self.spawn(p, boss=self.wave % 5 == 0 and self.spawned == 0,
+                                   golden=self.wave % 3 == 0 and self.spawned == 4)
                 self.spawned += 1
             for p in self.players.values():
                 if p.hp > 0:

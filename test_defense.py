@@ -1,8 +1,10 @@
 import json
 import time
 import unittest
+import math
+from unittest.mock import patch
 from aiohttp.test_utils import TestClient, TestServer
-from defense import Room
+from defense import Room, ROUTE_LENGTH, terrain_multiplier, MAP
 from server import create_app, ROOMS
 
 
@@ -110,7 +112,7 @@ class RulesTests(unittest.IsolatedAsyncioTestCase):
         p.units = []
         p.hp = 1
         r.spawn(p)
-        p.enemies[0]['progress'] = 31.99
+        p.enemies[0]['progress'] = ROUTE_LENGTH - .01
         await r.tick(.1)
         self.assertEqual(p.hp, 0)
         self.assertEqual(r.phase, 'finished')
@@ -124,6 +126,66 @@ class RulesTests(unittest.IsolatedAsyncioTestCase):
                 break
         self.assertEqual(r.phase, 'finished')
         self.assertTrue(all(p.gold >= 0 for p in r.players.values()))
+
+    async def test_shared_winding_route_and_endpoint(self):
+        self.assertEqual(Room.position(0), (0, 0))
+        self.assertEqual(Room.position(12.5), (10, 2.5))
+        self.assertEqual(Room.position(22.5), (0, 2.5))
+        self.assertEqual(Room.position(ROUTE_LENGTH), (10, 6))
+        self.assertEqual(Room.position(ROUTE_LENGTH + 10), (10, 6))
+        for x, y in MAP['cells']:
+            self.assertTrue(all(math.dist((x, y), Room.position(t / 10)) > .55
+                                for t in range(int(ROUTE_LENGTH * 10))))
+
+    async def test_terrain_bonus_applies_only_to_matching_type(self):
+        self.assertEqual(terrain_multiplier(1, 0), 1.25)
+        self.assertEqual(terrain_multiplier(4, 0), 1)
+        self.assertEqual(terrain_multiplier(7, 3), 1.25)
+        self.assertEqual(terrain_multiplier(25, 5), 1.25)
+        self.assertEqual(terrain_multiplier(1, 1), 1)
+        r = await self.room(1)
+        p = r.players[1]
+        hits = []
+        for cell in (0, 1):
+            p.units = [{'id': 1, 'dex': 1, 'cell': cell, 'power': 1, 'cooldown': 0}]
+            p.enemies = []
+            r.spawn(p)
+            e = p.enemies[0]
+            e['progress'] = 3
+            before = e['hp']
+            with patch('defense.random.random', return_value=1):
+                r.simulate(p, .01)
+            hits.append(before - e['hp'])
+        self.assertAlmostEqual(hits[0] / hits[1], 1.25)
+
+    async def test_path_zones_change_enemy_speed(self):
+        r = await self.room(1)
+        p = r.players[1]
+        p.units = []
+        distances = []
+        for start in (2, 15, 29):
+            p.enemies = []
+            r.spawn(p)
+            e = p.enemies[0]
+            e['progress'] = start
+            r.simulate(p, .1)
+            distances.append(e['progress'] - start)
+        self.assertAlmostEqual(distances[1] / distances[0], .65)
+        self.assertAlmostEqual(distances[2] / distances[0], 1.35)
+
+    async def test_golden_enemy_reward_and_fair_spawn(self):
+        r = await self.room(3)
+        r.seconds = 48 + 4 * .65
+        await r.tick(.01)
+        for p in r.players.values():
+            self.assertEqual(sum(bool(e.get('golden')) for e in p.enemies), 1)
+        p = r.players[1]
+        p.units = []
+        p.enemies = [e for e in p.enemies if e.get('golden')]
+        p.enemies[0]['hp'] = 0
+        before = p.gold
+        r.simulate(p, .1)
+        self.assertEqual(p.gold - before, 30)
 
 
 class NetworkTests(unittest.IsolatedAsyncioTestCase):
@@ -143,7 +205,7 @@ class NetworkTests(unittest.IsolatedAsyncioTestCase):
         self.fail('missing ' + kind)
 
     async def test_http_and_three_independent_websockets(self):
-        for path in ('/', '/assets/client.js', '/assets/style.css', '/api/catalog', '/api/health'):
+        for path in ('/', '/assets/client.js', '/assets/battlefield.js', '/assets/map.json', '/assets/style.css', '/api/catalog', '/api/health'):
             self.assertEqual((await self.client.get(path)).status, 200)
         response = await self.client.post('/api/rooms')
         code = (await response.json())['code']
