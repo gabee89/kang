@@ -89,7 +89,13 @@ async def websocket_handler(request):
                     await room.send_to(participant, {'type': 'error', 'message': '방장만 시작할 수 있어요.'})
                 elif not await room.begin():
                     await room.send_to(participant, {'type': 'error', 'message': '접속한 참가자가 한 명 이상 필요합니다.'})
-            elif typ in ('summon', 'merge', 'move', 'upgrade', 'raid'):
+            elif typ == 'difficulty':
+                error = room.configure(participant, payload.get('value'))
+                if error:
+                    await room.send_to(participant, {'type': 'error', 'message': error})
+                else:
+                    await room.broadcast_room()
+            elif typ in ('summon', 'merge', 'move', 'upgrade', 'raid', 'sell', 'speed'):
                 error = room.action(participant, payload)
                 if error:
                     await room.send_to(participant, {'type': 'error', 'message': error})

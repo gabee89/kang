@@ -26,8 +26,17 @@ MOVES = {
 
 def profile(dex):
     mode, move, ultimate, style = MOVES[dex]
+    power, interval = {
+        '덩굴채찍':(1,.85), '잎날가르기':(1.1,1.05), '할퀴기':(.75,.65),
+        '베어가르기':(1.25,1.15), '불꽃세례':(.85,.8), '몸통박치기':(1.35,1.2),
+        '물기':(1.15,.95), '물대포':(.9,.7), '전기쇼크':(.7,.6), '핥기':(.65,.6),
+        '섀도펀치':(1.5,1.25), '냉동빔':(1.1,1.1), '염동력':(1.25,1.2),
+    }[move]
+    ultimate_power = {'솔라빔':4.8,'화염방사':3.4,'불대문자':5,'하이드로펌프':4.2,
+                      '10만볼트':3.2,'번개':4.6,'섀도볼':4,'몸통박치기':3,'파괴광선':6,
+                      '눈보라':3.8,'사이코키네시스':4.5}[ultimate]
     return {'mode': mode, 'move': move, 'ultimate': ultimate, 'style': style,
             'range': 2.15 if mode == 'melee' else 4.4,
             'damageMultiplier': 1.9 if mode == 'melee' else 1,
-            'interval': 1.05 if mode == 'melee' else .9}
+            'movePower':power, 'ultimatePower':ultimate_power, 'interval':interval}
 
