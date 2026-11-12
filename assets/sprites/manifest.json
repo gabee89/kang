@@ -1,0 +1,157 @@
+{
+  "1": {
+    "frames": 24,
+    "frameMs": 217,
+    "size": 96
+  },
+  "2": {
+    "frames": 24,
+    "frameMs": 238,
+    "size": 96
+  },
+  "3": {
+    "frames": 24,
+    "frameMs": 429,
+    "size": 96
+  },
+  "4": {
+    "frames": 24,
+    "frameMs": 233,
+    "size": 96
+  },
+  "5": {
+    "frames": 24,
+    "frameMs": 196,
+    "size": 96
+  },
+  "6": {
+    "frames": 24,
+    "frameMs": 304,
+    "size": 96
+  },
+  "7": {
+    "frames": 24,
+    "frameMs": 146,
+    "size": 96
+  },
+  "8": {
+    "frames": 24,
+    "frameMs": 188,
+    "size": 96
+  },
+  "9": {
+    "frames": 24,
+    "frameMs": 517,
+    "size": 96
+  },
+  "19": {
+    "frames": 24,
+    "frameMs": 225,
+    "size": 96
+  },
+  "23": {
+    "frames": 24,
+    "frameMs": 158,
+    "size": 96
+  },
+  "25": {
+    "frames": 24,
+    "frameMs": 250,
+    "size": 96
+  },
+  "26": {
+    "frames": 24,
+    "frameMs": 371,
+    "size": 96
+  },
+  "41": {
+    "frames": 24,
+    "frameMs": 115,
+    "size": 96
+  },
+  "46": {
+    "frames": 24,
+    "frameMs": 208,
+    "size": 96
+  },
+  "48": {
+    "frames": 24,
+    "frameMs": 212,
+    "size": 96
+  },
+  "52": {
+    "frames": 24,
+    "frameMs": 296,
+    "size": 96
+  },
+  "66": {
+    "frames": 24,
+    "frameMs": 367,
+    "size": 96
+  },
+  "74": {
+    "frames": 24,
+    "frameMs": 229,
+    "size": 96
+  },
+  "92": {
+    "frames": 24,
+    "frameMs": 238,
+    "size": 96
+  },
+  "93": {
+    "frames": 14,
+    "frameMs": 100,
+    "size": 96
+  },
+  "94": {
+    "frames": 24,
+    "frameMs": 183,
+    "size": 96
+  },
+  "95": {
+    "frames": 24,
+    "frameMs": 212,
+    "size": 96
+  },
+  "111": {
+    "frames": 24,
+    "frameMs": 354,
+    "size": 96
+  },
+  "129": {
+    "frames": 24,
+    "frameMs": 250,
+    "size": 96
+  },
+  "130": {
+    "frames": 24,
+    "frameMs": 188,
+    "size": 96
+  },
+  "144": {
+    "frames": 24,
+    "frameMs": 217,
+    "size": 96
+  },
+  "145": {
+    "frames": 9,
+    "frameMs": 100,
+    "size": 96
+  },
+  "146": {
+    "frames": 24,
+    "frameMs": 112,
+    "size": 96
+  },
+  "149": {
+    "frames": 24,
+    "frameMs": 258,
+    "size": 96
+  },
+  "150": {
+    "frames": 24,
+    "frameMs": 288,
+    "size": 96
+  }
+}

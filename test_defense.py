@@ -4,7 +4,7 @@ import unittest
 import math
 from unittest.mock import patch
 from aiohttp.test_utils import TestClient, TestServer
-from defense import Room, ROUTE_LENGTH, terrain_multiplier, MAP, CATALOG
+from defense import Room, ROUTE_LENGTH, terrain_multiplier, MAP, CATALOG, MAX_UNITS, WAVE_LENGTH
 from server import create_app, ROOMS
 
 
@@ -42,7 +42,7 @@ class RulesTests(unittest.IsolatedAsyncioTestCase):
         p.gold = 0
         self.assertIsNotNone(self.action(r, p, type='summon'))
         p.gold = 10000
-        while len(p.units) < 12:
+        while len(p.units) < MAX_UNITS:
             self.action(r, p, type='summon')
         gold = p.gold
         self.assertIsNotNone(self.action(r, p, type='summon'))
@@ -55,7 +55,7 @@ class RulesTests(unittest.IsolatedAsyncioTestCase):
         self.assertIsNone(self.action(r, p, type='merge', id=100))
         self.assertEqual((len(p.units), p.units[0]['dex']), (1, 2))
         self.assertIsNotNone(self.action(r, p, type='move', id=100, cell=True))
-        self.assertIsNotNone(self.action(r, p, type='move', id=100, cell=12))
+        self.assertIsNotNone(self.action(r, p, type='move', id=100, cell=MAX_UNITS))
         self.assertIsNone(self.action(r, p, type='move', id=100, cell=11))
         self.assertEqual(p.units[0]['cell'], 11)
 
@@ -141,7 +141,7 @@ class RulesTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(terrain_multiplier(1, 0), 1.25)
         self.assertEqual(terrain_multiplier(4, 0), 1)
         self.assertEqual(terrain_multiplier(7, 3), 1.25)
-        self.assertEqual(terrain_multiplier(25, 5), 1.25)
+        self.assertEqual(terrain_multiplier(25, 4), 1.25)
         self.assertEqual(terrain_multiplier(1, 1), 1)
         r = await self.room(1)
         p = r.players[1]
@@ -153,7 +153,7 @@ class RulesTests(unittest.IsolatedAsyncioTestCase):
             e = p.enemies[0]
             e['progress'] = 2
             before = e['hp']
-            with patch('defense.random.random', return_value=1):
+            with patch('defense.random.random', return_value=1), patch.object(Room,'inflict'):
                 r.simulate(p, .01)
             hits.append(before - e['hp'])
         self.assertAlmostEqual(hits[0] / hits[1], 1.25)
@@ -175,7 +175,7 @@ class RulesTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_golden_enemy_reward_and_fair_spawn(self):
         r = await self.room(3)
-        r.seconds = 48 + 4 * .65
+        r.seconds = 2 * WAVE_LENGTH + 4 * .36
         await r.tick(.01)
         for p in r.players.values():
             self.assertEqual(sum(bool(e.get('golden')) for e in p.enemies), 1)
@@ -198,11 +198,11 @@ class RulesTests(unittest.IsolatedAsyncioTestCase):
             r.spawn(p)
             e = p.enemies[0]
             e['hp'] = e['maxHp'] = 1000
-            e['progress'] = 4
-            with patch('defense.random.random', return_value=1):
+            e['progress'] = 2
+            with patch('defense.random.random', return_value=1), patch.object(Room, 'inflict'):
                 r.simulate(p, .01)
             damage.append(1000 - e['hp'])
-        self.assertAlmostEqual(damage[0] / damage[1], 1.9)
+        self.assertAlmostEqual(damage[0] / damage[1], 1.9*CATALOG[5]['movePower']/CATALOG[2]['movePower'])
         self.assertLess(CATALOG[5]['range'], CATALOG[2]['range'])
         for dex in (5, 2):
             p.units = [{'id': 100, 'dex': dex, 'cell': 1, 'power': 1, 'cooldown': 0}]
@@ -210,7 +210,7 @@ class RulesTests(unittest.IsolatedAsyncioTestCase):
             r.spawn(p)
             e = p.enemies[0]
             e['hp'] = 1000
-            e['progress'] = 7
+            e['progress'] = 4.5
             r.simulate(p, .01)
             self.assertEqual(e['hp'] < 1000, dex == 2)
 
@@ -252,7 +252,7 @@ class RulesTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn(event['id'], [f['id'] for f in p.effects])
 
     async def test_corner_tiles_cover_both_legs_for_melee(self):
-        for cell, steps in ((0, (0, 22.5)), (3, (10, 11)), (4, (23, 24)), (7, (12, 13)), (8, (25, 27)), (11, (35, 36))):
+        for cell, steps in ((0, (0, 22.5)), (11, (10, 11)), (12, (23, 24)), (23, (12, 13)), (24, (25, 27)), (35, (35, 36))):
             for t in steps:
                 self.assertLessEqual(math.dist(MAP['cells'][cell], Room.position(t)), 2.15)
 
