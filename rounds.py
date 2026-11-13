@@ -15,9 +15,9 @@ THEMES = (('forest','햇살 숲'), ('valley','안개 계곡'), ('volcano','불�
           ('snowfield','눈꽃 설원'), ('moonlit','달빛 유적'))
 
 
-def make_plan(number):
+def make_plan(number,previous=None):
     dex = random.choice(tuple(ENEMIES))
-    weather = random.choice(tuple(WEATHER))
+    weather = random.choice(tuple(w for w in WEATHER if w!=(previous or {}).get('weather')))
     name, hint, _ = WEATHER[weather]
     theme, theme_name = THEMES[min(4, max(0, (number-1)//10))]
     boss = number % 10 == 0

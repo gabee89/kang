@@ -112,7 +112,7 @@ class Player:
         self.slot, self.token, self.ws = slot, token, ws
         self.name=f'트레이너 {slot}'
         self.last_seen = time.monotonic()
-        self.hp, self.gold, self.level, self.kills = 20, 200, 0, 0
+        self.hp, self.gold, self.level, self.kills = 20, 240, 0, 0
         self.units, self.enemies, self.effects = [], [], []
         self.eliminated_at = None
         self.last_action = -100
@@ -251,13 +251,18 @@ class BattleRoom:
         occupants=[u for u in p.units if u['cell']==cell and u is not exclude]
         return not occupants or all(u['dex']==dex for u in occupants) and len(occupants)<self.stack_limit(dex)
 
+    def merge_candidates(self,p,u):
+        evolution=CATALOG[u['dex']]['evolution']
+        return [v for v in p.units if v['dex']==u['dex'] and
+                (v['power']==u['power'] and v.get('enhance',0)==u.get('enhance',0) if evolution else v.get('enhance',0)<10)]
+
     def merge_unit(self,p,u):
         evolution=CATALOG[u['dex']]['evolution']
         required=3 if evolution else 2
-        same=sorted((v for v in p.units if v['dex']==u['dex'] and v['power']==u['power'] and v.get('enhance',0)==u.get('enhance',0)),key=lambda v:(v['cell'],v['id']))
-        if len(same)<required:return f'같은 포켓몬·강화 단계 {required}마리가 필요해요.'
+        same=self.merge_candidates(p,u)
+        if len(same)<required:return f'같은 포켓몬'+('·강화 단계' if evolution else ' (강화 단계 무관)')+f' {required}마리가 필요해요.'
         if u.get('enhance',0)>=10:return '최대 합성 단계입니다.'
-        materials=sorted((v for v in same if v is not u),key=lambda v:(v['cell']!=u['cell'],v['cell'],v['id']))[:required-1]
+        materials=sorted((v for v in same if v is not u),key=lambda v:((v.get('enhance',0),v['power']) if not evolution else (0,0),v['cell']!=u['cell'],v['cell'],v['id']))[:required-1]
         next_dex=evolution or u['dex']
         remaining=[v for v in p.units if v is not u and all(v is not m for m in materials)]
         def fits(cell):
@@ -273,7 +278,9 @@ class BattleRoom:
         if evolution:
             u['dex']=evolution
             u['evolutions']=u.get('evolutions',0)+1
-        else:u['enhance']=u.get('enhance',0)+1
+        else:
+            u['enhance']=max(v.get('enhance',0) for v in [u,*materials])+1
+            u['power']=max(v['power'] for v in [u,*materials])
         u['energy'],u['cooldown']=0,.5
         u['cell']=destination
         self.effect(p,u,'evolve',[],move=CATALOG[u['dex']]['name'],fromDex=previous,enhanced=not bool(evolution))
@@ -341,7 +348,7 @@ class BattleRoom:
         elif typ=='quick_merge':
             for u in sorted(p.units,key=lambda v:(v['cell'],v['id'])):
                 needed=3 if CATALOG[u['dex']]['evolution'] else 2
-                if u.get('enhance',0)<10 and sum(v['dex']==u['dex'] and v['power']==u['power'] and v.get('enhance',0)==u.get('enhance',0) for v in p.units)>=needed:
+                if u.get('enhance',0)<10 and len(self.merge_candidates(p,u))>=needed:
                     return self.merge_unit(p,u)
             return '합성할 동일 포켓몬이 부족해요.'
         elif typ in ('merge','move'):
@@ -541,7 +548,7 @@ class BattleRoom:
             self.status_tick(e,dt)
             if e['hp'] <= 0:
                 p.enemies.remove(e)
-                p.gold += (60 if e.get('bossRank') == 'boss' else 25 if e['boss'] else 5) + (25 if e.get('golden') else 0)
+                p.gold += (90 if e.get('bossRank') == 'boss' else 40 if e['boss'] else 7) + (40 if e.get('golden') else 0)
                 p.kills += 1
                 self.gain_experience(p)
                 continue
