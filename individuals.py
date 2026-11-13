@@ -1,4 +1,4 @@
-"""Defense-relevant IVs, inherited by the selected unit when merging."""
+"""Defense-relevant IVs, merged by independent per-stat maxima."""
 import random
 
 def roll_ivs():

@@ -1,7 +1,7 @@
 import unittest
 from unittest.mock import patch
 from defense import Room, attack_damage, CATALOG
-from test_defense import Socket
+from test_defense import Socket,near
 
 
 class WeaknessTests(unittest.IsolatedAsyncioTestCase):
@@ -25,7 +25,7 @@ class WeaknessTests(unittest.IsolatedAsyncioTestCase):
         p.units=[u]
         r.spawn(p)
         enemy=p.enemies[0]
-        enemy.update(hp=10000,shield=0,weakness='melee')
+        enemy.update(hp=10000,shield=0,weakness='melee',progress=near(0),types=[])
         with patch('defense.random.random',return_value=1),patch.object(Room,'inflict'):
             r.simulate(p,.01)
         self.assertAlmostEqual(10000-enemy['hp'],attack_damage(u)*1.6)

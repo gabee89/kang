@@ -24,4 +24,6 @@ jobs:
       - run: node --check assets/ultimate-fx.js
       - run: node --check assets/motion.js
       - run: node test_motion.cjs
+      - run: node --check assets/boss-arena.js
+      - run: node --check assets/rankings.js
 

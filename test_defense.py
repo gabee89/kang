@@ -8,6 +8,9 @@ from defense import Room, ROUTE_LENGTH, terrain_multiplier, MAP, CATALOG, MAX_UN
 from server import create_app, ROOMS
 
 
+def near(cell):
+    return min((i/40 for i in range(int(ROUTE_LENGTH*40))),key=lambda t:math.dist(MAP['cells'][cell],Room.position(t)))
+
 class Socket:
     closed = False
     async def send_json(self, data):
@@ -20,6 +23,9 @@ class RulesTests(unittest.IsolatedAsyncioTestCase):
         for _ in range(count):
             r.add(None, Socket())
         self.assertTrue(await r.begin())
+        r.stage='combat'
+        r.stage_left=90
+        r.wave=1
         return r
 
     def action(self, r, p, **data):
@@ -42,8 +48,7 @@ class RulesTests(unittest.IsolatedAsyncioTestCase):
         p.gold = 0
         self.assertIsNotNone(self.action(r, p, type='summon'))
         p.gold = 10000
-        while len(p.units) < MAX_UNITS:
-            self.action(r, p, type='summon')
+        p.units=[{'id':100+i,'dex':1,'cell':i%36,'power':1,'cooldown':0} for i in range(MAX_UNITS)]
         gold = p.gold
         self.assertIsNotNone(self.action(r, p, type='summon'))
         self.assertEqual(p.gold, gold)
@@ -128,9 +133,9 @@ class RulesTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(all(p.gold >= 0 for p in r.players.values()))
 
     async def test_shared_winding_route_and_endpoint(self):
-        self.assertEqual(Room.position(0), (0, 0))
-        self.assertEqual(Room.position(ROUTE_LENGTH), (10, 6))
-        self.assertEqual(Room.position(ROUTE_LENGTH + 10), (10, 6))
+        self.assertEqual(Room.position(0), (10, 6))
+        self.assertEqual(Room.position(ROUTE_LENGTH), (0, 0))
+        self.assertEqual(Room.position(ROUTE_LENGTH + 10), (0, 0))
         for x, y in MAP['cells']:
             self.assertTrue(all(math.dist((x, y), Room.position(t / 10)) > .55
                                 for t in range(int(ROUTE_LENGTH * 10))))
@@ -149,7 +154,8 @@ class RulesTests(unittest.IsolatedAsyncioTestCase):
             p.enemies = []
             r.spawn(p)
             e = p.enemies[0]
-            e['progress'] = 2
+            e['progress'] = near(p.units[0]['cell'])
+            e['types']=[]
             before = e['hp']
             with patch('defense.random.random', return_value=1), patch.object(Room,'inflict'):
                 r.simulate(p, .01)
@@ -173,7 +179,9 @@ class RulesTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_golden_enemy_reward_and_fair_spawn(self):
         r = await self.room(3)
-        r.seconds = 2 * WAVE_LENGTH + 4 * .36
+        r.wave=2
+        r.start_round()
+        r.round_time=4*.48
         await r.tick(.01)
         for p in r.players.values():
             self.assertEqual(sum(bool(e.get('golden')) for e in p.enemies), 1)
@@ -196,7 +204,8 @@ class RulesTests(unittest.IsolatedAsyncioTestCase):
             r.spawn(p)
             e = p.enemies[0]
             e['hp'] = e['maxHp'] = 1000
-            e['progress'] = 2
+            e['progress'] = near(p.units[0]['cell'])
+            e['types']=[]
             with patch('defense.random.random', return_value=1), patch.object(Room, 'inflict'):
                 r.simulate(p, .01)
             damage.append(1000 - e['hp'])
@@ -208,7 +217,8 @@ class RulesTests(unittest.IsolatedAsyncioTestCase):
             r.spawn(p)
             e = p.enemies[0]
             e['hp'] = 1000
-            e['progress'] = 4.5
+            e['progress'] = next(i/40 for i in range(int(ROUTE_LENGTH*40)) if 2.5<math.dist(MAP['cells'][1],Room.position(i/40))<3.5)
+            e['types']=[]
             r.simulate(p, .01)
             self.assertEqual(e['hp'] < 1000, dex == 2)
 
@@ -222,6 +232,8 @@ class RulesTests(unittest.IsolatedAsyncioTestCase):
         r.spawn(p)
         e = p.enemies[0]
         e['hp'] = e['maxHp'] = 10000
+        e['progress']=near(0)
+        e['types']=[]
         r.simulate(p, .1)
         self.assertEqual(u['energy'], 0)
         casts = [f for f in p.effects if f['kind'] == 'ultimate']
@@ -237,6 +249,8 @@ class RulesTests(unittest.IsolatedAsyncioTestCase):
         p.units = [{'id': 100, 'dex': 1, 'cell': 0, 'power': 1, 'cooldown': 0, 'energy': 0}]
         r.spawn(p)
         p.enemies[0]['hp'] = 10000
+        p.enemies[0]['progress']=near(0)
+        p.enemies[0]['types']=[]
         r.simulate(p, .05)
         self.assertGreater(p.units[0]['energy'], 18)
         event = p.effects[0]
@@ -260,7 +274,7 @@ class RulesTests(unittest.IsolatedAsyncioTestCase):
         p = r.players[1]
         p.units = [{'id': i + 100, 'dex': 1, 'cell': i, 'power': 1, 'cooldown': 0, 'energy': 90} for i in range(3)]
         self.assertIsNone(self.action(r, p, type='move', id=100, cell=1))
-        self.assertEqual([u['cell'] for u in p.units], [1, 0, 2])
+        self.assertEqual([u['cell'] for u in p.units], [1, 1, 2])
         self.assertIsNone(self.action(r, p, type='merge', id=100))
         u = p.units[0]
         self.assertEqual((len(p.units), u['dex'], u['cell'], u['energy']), (1, 2, 1, 0))
@@ -316,6 +330,9 @@ class NetworkTests(unittest.IsolatedAsyncioTestCase):
         first.units[0]['energy'] = 100
         room.spawn(first)
         first.enemies[-1]['hp'] = 10000
+        first.enemies[-1]['progress']=near(first.units[0]['cell'])
+        room.stage='combat'
+        room.stage_left=90
         await room.tick(.05)
         for ws in sockets:
             for _ in range(30):

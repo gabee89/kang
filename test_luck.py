@@ -10,8 +10,8 @@ class LuckTests(unittest.IsolatedAsyncioTestCase):
         await room.begin()
         p,q=room.players.values()
         original=q.gold
-        p.gold=2000
-        for level in range(5):
+        p.gold=10000
+        for level in range(10):
             before=p.gold
             p.last_action=-100
             self.assertIsNone(room.action(p,{'type':'luck','level':999}))
@@ -27,19 +27,19 @@ class LuckTests(unittest.IsolatedAsyncioTestCase):
         q.last_action=-100
         self.assertIsNotNone(room.action(q,{'type':'luck'}))
         self.assertEqual(q.gold,99)
-        self.assertEqual(p.public()['summonOdds'],summon_odds(5))
+        self.assertEqual(p.public()['summonOdds'],summon_odds(10))
 
     def test_odds_preserve_evolution_and_improve_rare_pulls(self):
         previous=summon_odds(0)
         self.assertEqual(previous,{'base':96,'middle':3,'final':.7,'legendary':.3})
-        for level in range(1,6):
+        for level in range(1,11):
             odds=summon_odds(level)
             self.assertAlmostEqual(sum(odds.values()),100)
-            self.assertGreater(odds['base'],85)
+            self.assertGreaterEqual(odds['base'],75)
             for key in ('middle','final','legendary'):
                 self.assertGreater(odds[key],previous[key])
             previous=odds
-        self.assertEqual(summon_odds(999),summon_odds(5))
+        self.assertEqual(summon_odds(999),summon_odds(10))
 
     def test_route_curvature_and_flank_attachment(self):
         import math
@@ -49,5 +49,6 @@ class LuckTests(unittest.IsolatedAsyncioTestCase):
             angles.append(math.atan2(b[1]-a[1],b[0]-a[0]))
         # No right-angle corners remain in the combat path.
         self.assertLess(max(abs(math.atan2(math.sin(b-a),math.cos(b-a))) for a,b in zip(angles,angles[1:])),.55)
-        self.assertLess(math.dist(Room.position(MAP['flankProgress']),MAP['route'][48]),.001)
+        self.assertTrue(0<MAP['flankProgress']<ROUTE_LENGTH)
+        self.assertLess(min(math.dist(Room.position(MAP['flankProgress']),p) for p in MAP['route']),.15)
 

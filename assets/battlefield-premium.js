@@ -20,9 +20,9 @@ const roof=c.createLinearGradient(-30,-62,27,-14);roof.addColorStop(0,'#ddac7c')
 c.strokeStyle='#f0ceb28c';c.lineWidth=1.3;for(let i=0;i<5;i++){c.beginPath();c.moveTo(-27+i*6,-29-i*6);c.lineTo(i*5,-49+i*2);c.stroke();}
 c.fillStyle='#244c57';c.beginPath();c.roundRect(-9,-5,18,22,[8,8,1,1]);c.fill();c.fillStyle='#b6e5df';c.fillRect(-22,-15,8,10);c.fillRect(14,-15,8,10);c.strokeStyle='#e7e8ce';c.lineWidth=2;c.strokeRect(-22,-15,8,10);c.strokeRect(14,-15,8,10);
 ellipse(c,0,-25,10,10,'#477f82');c.fillStyle='#f6efcf';c.fillRect(-5,-27,10,3);c.fillRect(-1.5,-31,3,11);c.restore();}
-function pedestal(c,p,role){const [x,y]=p,w=map.tileWidth;ellipse(c,x+2,y+32,w*.49,7,'#123f3338');c.fillStyle='#486b66';c.beginPath();c.roundRect(x-w/2,y-29,w,64,10);c.fill();
+function pedestal(c,p,role){const [x,y]=p,w=map.tileWidth;const compact=map.tileHeight===52;c.save();c.translate(0,compact?y*.25:0);c.scale(1,compact?.75:1);ellipse(c,x+2,y+32,w*.49,7,'#123f3338');c.fillStyle='#486b66';c.beginPath();c.roundRect(x-w/2,y-29,w,64,10);c.fill();
 const g=c.createLinearGradient(x-20,y-35,x+20,y+27);g.addColorStop(0,'#e5e7cb');g.addColorStop(.28,'#b8c8af');g.addColorStop(1,'#6f9b87');c.fillStyle=g;c.beginPath();c.roundRect(x-w/2,y-35,w,64,10);c.fill();c.strokeStyle='#eef1d880';c.lineWidth=1;c.stroke();
-c.fillStyle=role==='neutral'?'#44685b44':palette[role]+'65';c.beginPath();c.roundRect(x-w/2+4,y-31,w-8,55,8);c.fill();c.textAlign='center';c.fillStyle=role==='neutral'?'#405e54':palette[role];c.font='bold 14px sans-serif';c.shadowColor='#274b45';c.shadowBlur=1;c.fillText(symbols[role],x,y+2);c.shadowBlur=0;}
+c.fillStyle=role==='neutral'?'#44685b44':palette[role]+'65';c.beginPath();c.roundRect(x-w/2+4,y-31,w-8,55,8);c.fill();c.textAlign='center';c.fillStyle=role==='neutral'?'#405e54':palette[role];c.font='bold 14px sans-serif';c.shadowColor='#274b45';c.shadowBlur=1;c.fillText(symbols[role],x,y+2);c.shadowBlur=0;c.restore();}
 function paint(){if(!map)return;back=document.createElement('canvas');back.width=1800;back.height=1160;const c=back.getContext('2d');c.scale(2,2);c.imageSmoothingEnabled=true;
 if(artReady)c.drawImage(terrain,0,0,900,580);else{c.fillStyle='#4b775c';c.fillRect(0,0,900,580);}
 // Soft cool wash makes tiny combat sprites readable against the sunlit terrain.
