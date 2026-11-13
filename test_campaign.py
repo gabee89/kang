@@ -3,7 +3,7 @@ import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
-from defense import Room,MAP,ROUTE_LENGTH,CATALOG
+from defense import Room,MAP,ROUTE_LENGTH,CATALOG,CELL_COUNT,MAX_UNITS
 from elements import effectiveness
 from leaderboard import Leaderboard
 from test_defense import Socket
@@ -27,9 +27,9 @@ class CampaignTests(unittest.IsolatedAsyncioTestCase):
         r=await self.room(1);p=r.players[1]
         r.speed=3
         await r.tick(1)
-        self.assertEqual(r.stage,'prep');self.assertAlmostEqual(r.stage_left,7)
+        self.assertEqual(r.stage,'prep');self.assertAlmostEqual(r.stage_left,9)
         self.assertEqual(r.seconds,0);self.assertEqual(p.enemies,[])
-        await r.tick(7.01)
+        await r.tick(9.01)
         self.assertEqual((r.wave,r.stage),(1,'combat'))
 
     async def test_mode_is_host_only_and_lobby_only(self):
@@ -118,7 +118,7 @@ class CampaignTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_evolution_and_merge_never_make_invalid_mixed_stacks(self):
         r=await self.room(1);p=r.players[1]
-        p.units=[self.unit(id=100+i,cell=i%36,enhance=0) for i in range(108)]
+        p.units=[self.unit(id=100+i,cell=i%CELL_COUNT,enhance=0) for i in range(MAX_UNITS)]
         for i in range(3):p.units[i]['enhance']=1
         before=[dict(u) for u in p.units]
         self.assertIsNotNone(self.action(r,p,type='merge',id=100))
@@ -135,4 +135,5 @@ class CampaignTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(r.phase,'finished')
         self.assertFalse(r.result['completed'])
         self.assertTrue(all(p['roundsCleared']==0 for p in r.result['scores']))
+
 

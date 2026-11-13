@@ -1,6 +1,6 @@
 import unittest
 from unittest.mock import patch
-from defense import Room, MAX_UNITS, WAVE_LENGTH, attack_damage, CATALOG
+from defense import Room, MAX_UNITS, WAVE_LENGTH, attack_damage, CATALOG, CELL_COUNT
 from test_defense import Socket,near
 
 
@@ -19,12 +19,12 @@ class UpgradeTests(unittest.IsolatedAsyncioTestCase):
         p.last_action=-100
         return r.action(p,data)
 
-    async def test_36_slots_sale_and_resummon_no_double_sale(self):
+    async def test_24_slots_sale_and_resummon_no_double_sale(self):
         r=await self.room(2)
         p,q=r.players.values()
         p.gold=10000
-        p.units=[{'id':100+i,'dex':1,'cell':i%36,'power':1,'cooldown':0} for i in range(MAX_UNITS)]
-        self.assertEqual(len(p.units),108)
+        p.units=[{'id':100+i,'dex':1,'cell':i%CELL_COUNT,'power':1,'cooldown':0} for i in range(MAX_UNITS)]
+        self.assertEqual(len(p.units),MAX_UNITS)
         self.assertIsNotNone(self.action(r,p,type='summon'))
         unit=p.units[-1]
         refund=p.public()['units'][-1]['sellValue']
@@ -35,8 +35,8 @@ class UpgradeTests(unittest.IsolatedAsyncioTestCase):
         self.assertIsNotNone(self.action(r,p,type='sell',id=unit['id']))
         with patch('defense.random.choices',side_effect=[['base'],[1]]):
             self.assertIsNone(self.action(r,p,type='summon'))
-        self.assertEqual(len(p.units),108)
-        self.assertEqual(len({u['cell'] for u in p.units}),36)
+        self.assertEqual(len(p.units),MAX_UNITS)
+        self.assertEqual(len({u['cell'] for u in p.units}),CELL_COUNT)
 
     async def test_speed_is_host_only_and_scales_simulation(self):
         r=await self.room(2)
@@ -75,7 +75,7 @@ class UpgradeTests(unittest.IsolatedAsyncioTestCase):
         extreme=p.enemies[-1]['maxHp']
         r.difficulty='normal'
         r.spawn(p)
-        self.assertAlmostEqual(extreme/p.enemies[-1]['maxHp'],1.8/.8)
+        self.assertAlmostEqual(extreme/p.enemies[-1]['maxHp'],1.7/.75)
 
     async def test_burn_poison_tick_and_expire_without_stacking(self):
         r=await self.room()
@@ -191,4 +191,5 @@ class UpgradeTests(unittest.IsolatedAsyncioTestCase):
 
 if __name__=='__main__':
     unittest.main()
+
 

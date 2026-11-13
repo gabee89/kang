@@ -1,6 +1,6 @@
 import unittest
 from unittest.mock import patch
-from defense import (Room, Player, MAP, terrain_multiplier, region_attack_interval,
+from defense import (Room, Player, MAP, CELL_COUNT, terrain_multiplier, region_attack_interval,
                      energy_multiplier, critical_chance, attack_damage)
 from individuals import attack_interval
 from defense import CATALOG
@@ -11,10 +11,10 @@ class RegionTests(unittest.TestCase):
         return dict(id=1,dex=dex,cell=cell,power=1,cooldown=0,energy=0)
 
     def test_all_five_regions_exist_on_both_sides_and_cover_every_slot(self):
-        self.assertEqual(len(MAP['terrain']),36)
+        self.assertEqual(len(MAP['terrain']),24)
         self.assertEqual(len(MAP['regions']),5)
         for side in (range(3),range(3,6)):
-            kinds={MAP['terrain'][i] for i in range(36) if i%6 in side}
+            kinds={MAP['terrain'][i] for i in range(CELL_COUNT) if i%6 in side}
             self.assertEqual(kinds,{'grass','fire','water','electric','ghost'})
 
     def test_regions_have_distinct_effects_and_affinities(self):

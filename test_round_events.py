@@ -40,7 +40,7 @@ class RoundEventTests(unittest.IsolatedAsyncioTestCase):
         for player in room.players.values():
             room.spawn(player)
             self.assertTrue(player.enemies[-1]['flank'])
-            self.assertEqual(player.enemies[-1]['progress'],MAP['flankProgress'])
+            self.assertEqual(room.enemy_position(player.enemies[-1]),room.position(MAP['flankProgress']))
         room.complete_round();room.start_round()
         self.assertEqual(room.active_plan['entry'],'main')
 
