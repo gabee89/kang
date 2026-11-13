@@ -6,6 +6,13 @@ from elements import effectiveness
 
 
 class RoundEventTests(unittest.IsolatedAsyncioTestCase):
+    def test_consecutive_rounds_cannot_repeat_the_same_weather(self):
+        previous=make_plan(1)
+        for number in range(2,51):
+            plan=make_plan(number,previous)
+            self.assertNotEqual(plan['weather'],previous['weather'])
+            previous=plan
+
     async def room(self):
         class Socket:
             closed=False

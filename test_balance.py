@@ -5,10 +5,10 @@ from rounds import make_plan
 
 
 class BalanceTests(unittest.TestCase):
-    def test_preparation_and_starting_budget_support_five_pulls(self):
+    def test_preparation_and_starting_budget_support_six_pulls(self):
         self.assertEqual(PREPARATION,10)
         p=Player(1,'test',None)
-        self.assertEqual(p.gold//40,5)
+        self.assertEqual(p.gold//40,6)
 
     def test_difficulty_order_remains_strict(self):
         self.assertLess(DIFFICULTIES['normal'],DIFFICULTIES['challenge'])

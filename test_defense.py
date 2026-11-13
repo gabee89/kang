@@ -44,7 +44,7 @@ class RulesTests(unittest.IsolatedAsyncioTestCase):
         r = await self.room(3)
         p, q, _ = r.players.values()
         self.assertIsNone(self.action(r, p, type='summon'))
-        self.assertEqual((p.gold, q.gold), (160, 200))
+        self.assertEqual((p.gold, q.gold), (200, 240))
         p.gold = 0
         self.assertIsNotNone(self.action(r, p, type='summon'))
         p.gold = 10000
@@ -68,11 +68,11 @@ class RulesTests(unittest.IsolatedAsyncioTestCase):
         r = await self.room(3)
         p, q, z = r.players.values()
         self.assertIsNone(self.action(r, p, type='raid'))
-        self.assertEqual(p.gold, 120)
+        self.assertEqual(p.gold, 160)
         self.assertEqual(len(p.enemies), 0)
         self.assertEqual([len(v.enemies) for v in (q, z)], [1, 1])
         self.assertIsNotNone(self.action(r, p, type='raid'))
-        self.assertEqual(p.gold, 120)
+        self.assertEqual(p.gold, 160)
 
     async def test_disconnect_does_not_pause_and_allows_secure_rejoin(self):
         r = await self.room(3)
@@ -189,7 +189,7 @@ class RulesTests(unittest.IsolatedAsyncioTestCase):
         p.enemies[0]['hp'] = 0
         before = p.gold
         r.simulate(p, .1)
-        self.assertEqual(p.gold - before, 30)
+        self.assertEqual(p.gold - before, 47)
 
     async def test_melee_range_and_damage_vs_ranged(self):
         r = await self.room(1)

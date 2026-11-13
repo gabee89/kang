@@ -8,3 +8,5 @@
 @media(max-width:900px){.mobile-manage aside .encounter{display:block;padding:12px}.encounter p{font-size:10px}}
 @media(max-width:1200px) and (max-height:600px) and (orientation:landscape){body.in-match .round-banner{max-height:28px;overflow:hidden}body.in-match.mobile-manage aside .encounter{display:block}}
 
+.effects-control{font-size:10px;padding:6px 8px;max-width:120px}.arena-title #fieldStatus{font-size:10px;letter-spacing:0;color:#e1ebc9}@media(max-width:1200px) and (max-height:600px) and (orientation:landscape){.effects-control{font-size:8px;padding:3px;max-width:94px}}
+

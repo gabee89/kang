@@ -48,7 +48,7 @@ class Campaign:
 
     def start_round(self):
         self.wave+=1
-        self.active_plan=self.next_plan if self.next_plan['round']==self.wave else make_plan(self.wave)
+        self.active_plan=self.next_plan if self.next_plan['round']==self.wave else make_plan(self.wave,self.active_plan)
         self.spawned=0
         self.round_time=0
         self.stage='boss' if self.wave%10==0 else 'combat'
@@ -56,7 +56,7 @@ class Campaign:
         for p in self.players.values():
             p.effects=[]
             if p.hp>0:
-                p.gold+=40+self.wave*2
+                p.gold+=60+self.wave*3
         if self.stage=='boss':
             alive=[p for p in self.players.values() if p.hp>0]
             if not alive:return
@@ -85,7 +85,7 @@ class Campaign:
             self.stage='prep'
             self.stage_left=PREPARATION
             self.shared_boss=None
-            self.next_plan=make_plan(self.wave+1)
+            self.next_plan=make_plan(self.wave+1,self.active_plan)
 
     def encounter_plan(self):
         if self.active_plan and self.active_plan['round']==self.wave:return self.active_plan
@@ -130,7 +130,7 @@ class Campaign:
         if boss['hp']<=0:
             for p in self.players.values():
                 if p.hp>0:
-                    p.gold+=150+self.wave*8
+                    p.gold+=200+self.wave*10
                     p.kills+=1
                     self.gain_experience(p)
             self.complete_round()
