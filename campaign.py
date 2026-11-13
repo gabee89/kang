@@ -136,11 +136,11 @@ class Campaign:
             self.complete_round()
         elif self.stage_left<=0:
             if self.game_mode=='coop' and self.participants>1:
-                self.team_hp=max(0,self.team_hp-8*len([p for p in self.players.values() if p.hp>0]))
+                self.team_hp=max(0,self.team_hp-sum(self.protect_damage(p,8) for p in self.players.values() if p.hp>0))
                 if not self.team_hp:
                     for p in self.players.values():p.hp=0
             else:
-                for p in self.players.values():p.hp=max(0,p.hp-8)
+                for p in self.players.values():p.hp=max(0,p.hp-self.protect_damage(p,8))
             self.complete_round(success=False)
 
     def advance(self,dt):

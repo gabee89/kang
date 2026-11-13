@@ -27,3 +27,6 @@ jobs:
       - run: node --check assets/boss-arena.js
       - run: node --check assets/rankings.js
 
+
+      - run: node --check assets/adventure-ui.js
+
