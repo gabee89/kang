@@ -1,7 +1,7 @@
 import unittest
 from unittest.mock import patch
 from defense import Room, MAX_UNITS, WAVE_LENGTH, attack_damage, CATALOG
-from test_defense import Socket
+from test_defense import Socket,near
 
 
 class UpgradeTests(unittest.IsolatedAsyncioTestCase):
@@ -10,6 +10,9 @@ class UpgradeTests(unittest.IsolatedAsyncioTestCase):
         for _ in range(count):
             room.add(None,Socket())
         await room.begin()
+        room.stage='combat'
+        room.stage_left=90
+        room.wave=1
         return room
 
     def action(self,r,p,**data):
@@ -20,9 +23,8 @@ class UpgradeTests(unittest.IsolatedAsyncioTestCase):
         r=await self.room(2)
         p,q=r.players.values()
         p.gold=10000
-        while len(p.units)<MAX_UNITS:
-            self.action(r,p,type='summon')
-        self.assertEqual(len(p.units),36)
+        p.units=[{'id':100+i,'dex':1,'cell':i%36,'power':1,'cooldown':0} for i in range(MAX_UNITS)]
+        self.assertEqual(len(p.units),108)
         self.assertIsNotNone(self.action(r,p,type='summon'))
         unit=p.units[-1]
         refund=p.public()['units'][-1]['sellValue']
@@ -31,8 +33,9 @@ class UpgradeTests(unittest.IsolatedAsyncioTestCase):
         self.assertIsNone(self.action(r,p,type='sell',id=unit['id']))
         self.assertEqual(p.gold,gold+refund)
         self.assertIsNotNone(self.action(r,p,type='sell',id=unit['id']))
-        self.assertIsNone(self.action(r,p,type='summon'))
-        self.assertEqual(len(p.units),36)
+        with patch('defense.random.choices',side_effect=[['base'],[1]]):
+            self.assertIsNone(self.action(r,p,type='summon'))
+        self.assertEqual(len(p.units),108)
         self.assertEqual(len({u['cell'] for u in p.units}),36)
 
     async def test_speed_is_host_only_and_scales_simulation(self):
@@ -49,12 +52,12 @@ class UpgradeTests(unittest.IsolatedAsyncioTestCase):
     async def test_midboss_and_boss_have_distinct_health_and_visuals(self):
         r=await self.room(2)
         for wave in (5,10,15,20):
-            r.seconds=(wave-1)*WAVE_LENGTH
             r.wave=wave-1
             for p in r.players.values():
                 p.enemies=[]
+            r.start_round()
             await r.tick(.01)
-            bosses=[p.enemies[0] for p in r.players.values()]
+            bosses=[r.shared_boss]*2 if wave%10==0 else [p.enemies[0] for p in r.players.values()]
             self.assertEqual([e['bossRank'] for e in bosses],['boss' if wave%10==0 else 'elite']*2)
             self.assertTrue(all(e['dex']==(149 if wave%10==0 else 95) for e in bosses))
             self.assertEqual(bosses[0]['maxHp'],bosses[1]['maxHp'])
@@ -139,6 +142,10 @@ class UpgradeTests(unittest.IsolatedAsyncioTestCase):
         self.assertGreater(e['expose'],0)
         p.units=[{'id':100,'dex':7,'power':1,'cell':0,'cooldown':0,'energy':0}]
         e['hp']=10000
+        e['progress']=near(0)
+        e['types']=[]
+        e['progress']=near(0)
+        e['types']=[]
         e['poison']=0
         before=e['hp']
         with patch('defense.random.random',return_value=1):
@@ -154,6 +161,8 @@ class UpgradeTests(unittest.IsolatedAsyncioTestCase):
         p.units=[{'id':100,'dex':25,'power':1,'cell':0,'cooldown':0,'energy':0}]
         r.inflict(e,'water',100)
         e['hp']=10000
+        e['progress']=near(0)
+        e['types']=[]
         with patch('defense.random.random',return_value=1):
             r.simulate(p,.01)
         self.assertAlmostEqual(10000-e['hp'],attack_damage(p.units[0])*1.25)

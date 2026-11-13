@@ -8,6 +8,7 @@ from bisect import bisect_right
 from pathlib import Path
 from moves import profile
 from individuals import roll_ivs, iv_factor, attack_interval, iv_grade
+from elements import TYPES, effectiveness
 
 # id, Korean name, evolution, role, tier
 DEX = [
@@ -32,10 +33,11 @@ for line in ((1,2,3),(4,5,6),(7,8,9),(92,93,94),(25,26),(129,130),(131,),(144,),
     for stage,dex in enumerate(line):
         CATALOG[dex].update({'lineLength':len(line),'stage':stage+1,
                             'growthBonus':(1,1.3,1.9)[stage] if len(line)==3 else (1,1.8)[stage] if len(line)==2 else 1.2})
-WAVE_LENGTH = 20
+WAVE_LENGTH = 90
 DIFFICULTIES = {'normal': .8, 'challenge': 1.25, 'extreme': 1.8}
 MAP = json.loads((Path(__file__).parent / 'assets' / 'map.json').read_text(encoding='utf-8'))
-MAX_UNITS = len(MAP['cells'])
+CELL_COUNT = len(MAP['cells'])
+MAX_UNITS = CELL_COUNT*3
 ROUTE_LENGTH = sum(math.dist(a, b) for a, b in zip(MAP['route'], MAP['route'][1:]))
 ROUTE_CUMULATIVE=[0]
 for a,b in zip(MAP['route'],MAP['route'][1:]):
@@ -43,7 +45,7 @@ for a,b in zip(MAP['route'],MAP['route'][1:]):
 
 
 def summon_odds(level=0):
-    level=max(0,min(5,level))
+    level=max(0,min(10,level))
     middle=3+level*1.4
     final=.7+level*.55
     legendary=.3+level*.15
@@ -86,6 +88,7 @@ def weakness_multiplier(enemy,mode):
 class Player:
     def __init__(self, slot, token, ws):
         self.slot, self.token, self.ws = slot, token, ws
+        self.name=f'트레이너 {slot}'
         self.last_seen = time.monotonic()
         self.hp, self.gold, self.level, self.kills = 20, 160, 0, 0
         self.units, self.enemies, self.effects = [], [], []
@@ -93,9 +96,15 @@ class Player:
         self.last_action = -100
         self.raid_ready = 0
         self.luck_level = 0
+        self.boss_damage=0
+        self.boss_round_damage=0
+        self.damage=0
+        self.rounds_cleared=0
+        self.score=0
 
     def public(self):
-        return {'id': self.slot, 'name': f'트레이너 {self.slot}', 'hp': self.hp,
+        return {'id': self.slot, 'name': self.name, 'hp': self.hp,
+                'score':self.score,'bossDamage':round(self.boss_damage),'bossRoundDamage':round(self.boss_round_damage),'damage':round(self.damage),'roundsCleared':self.rounds_cleared,
                 'gold': self.gold, 'level': self.level, 'kills': self.kills,
                 'connected': self.ws is not None and not self.ws.closed,
                 'alive': self.hp > 0, 'eliminatedAt': self.eliminated_at,
@@ -111,7 +120,7 @@ class Player:
                 'effects': self.effects}
 
 
-class Room:
+class BattleRoom:
     def __init__(self, room_code):
         self.code, self.players, self.host = room_code, {}, None
         self.phase, self.seconds, self.wave = 'lobby', 0, 0
@@ -186,7 +195,9 @@ class Room:
         self.speed = 1
         self.participants = len(self.players)
         for p in self.players.values():
+            name=p.name
             p.__init__(p.slot, p.token, p.ws)
+            p.name=name
             self.summon(p, free=True)
             self.summon(p, free=True)
         await self.broadcast_room()
@@ -201,13 +212,51 @@ class Room:
         self.difficulty = value
         return None
 
+    @staticmethod
+    def stack_limit(dex):
+        return 3 if CATALOG[dex]['evolution'] else 2
+
+    def summon_cell(self,p,dex):
+        empty=next((i for i in range(CELL_COUNT) if not any(u['cell']==i for u in p.units)),None)
+        if empty is not None:return empty
+        return next((i for i in range(CELL_COUNT) if self.can_place(p,dex,i)),None)
+
+    def can_place(self,p,dex,cell,exclude=None):
+        occupants=[u for u in p.units if u['cell']==cell and u is not exclude]
+        return not occupants or all(u['dex']==dex for u in occupants) and len(occupants)<self.stack_limit(dex)
+
+    def merge_unit(self,p,u):
+        evolution=CATALOG[u['dex']]['evolution']
+        required=3 if evolution else 2
+        same=sorted((v for v in p.units if v['dex']==u['dex'] and v['power']==u['power'] and v.get('enhance',0)==u.get('enhance',0)),key=lambda v:(v['cell'],v['id']))
+        if len(same)<required:return f'같은 포켓몬·강화 단계 {required}마리가 필요해요.'
+        if u.get('enhance',0)>=10:return '최대 합성 단계입니다.'
+        materials=sorted((v for v in same if v is not u),key=lambda v:(v['cell']!=u['cell'],v['cell'],v['id']))[:required-1]
+        next_dex=evolution or u['dex']
+        remaining=[v for v in p.units if v is not u and all(v is not m for m in materials)]
+        def fits(cell):
+            occupants=[v for v in remaining if v['cell']==cell]
+            return not occupants or all(v['dex']==next_dex for v in occupants) and len(occupants)<self.stack_limit(next_dex)
+        destination=next((cell for cell in [u['cell'],*range(CELL_COUNT)] if fits(cell)),None)
+        if destination is None:return '진화체를 놓을 공간이 필요해요. 먼저 판매하거나 칸을 비워주세요.'
+        if any(v.get('ivs') for v in [u,*materials]):
+            u['ivs']={key:max(v.get('ivs',{}).get(key,0) for v in [u,*materials]) for key in ('attack','special','speed')}
+        u['xp']=sum(v.get('xp',0) for v in [u,*materials])
+        for v in materials:p.units.remove(v)
+        previous=u['dex']
+        if evolution:
+            u['dex']=evolution
+            u['evolutions']=u.get('evolutions',0)+1
+        else:u['enhance']=u.get('enhance',0)+1
+        u['energy'],u['cooldown']=0,.5
+        u['cell']=destination
+        self.effect(p,u,'evolve',[],move=CATALOG[u['dex']]['name'],fromDex=previous,enhanced=not bool(evolution))
+
     def summon(self, p, free=False):
         if len(p.units) >= MAX_UNITS:
             return f'{MAX_UNITS}칸이 가득 찼어요. 합성하거나 선택한 포켓몬을 판매해 공간을 확보하세요.'
         if not free and p.gold < 40:
             return '소환에는 40코인이 필요해요.'
-        if not free:
-            p.gold -= 40
         odds=summon_odds(p.luck_level)
         group = random.choices(tuple(odds),weights=tuple(odds.values()))[0]
         if group=='base':
@@ -215,7 +264,10 @@ class Room:
         else:
             dex_id=random.choice({'middle':(2,5,8,93),'final':(3,6,9,26,94,130),'legendary':(144,145,146,150)}[group])
         dex=CATALOG[dex_id]
-        cell = next(i for i in range(MAX_UNITS) if all(u['cell'] != i for u in p.units))
+        cell=self.summon_cell(p,dex_id)
+        if cell is None:
+            return '같은 포켓몬 중첩 또는 빈 칸이 필요해요. 합성·판매로 공간을 확보하세요.'
+        if not free:p.gold-=40
         self.uid += 1
         p.units.append({'id': self.uid, 'dex': dex['dex'], 'cell': cell, 'power': 1, 'cooldown': 0, 'energy': 0,
                         'enhance':0,'ivs':roll_ivs(),'xp':0,'evolutions':0,'source':group})
@@ -247,7 +299,7 @@ class Room:
             return self.summon(p)
         if typ == 'luck':
             cost=luck_cost(p.luck_level)
-            if p.luck_level>=5:
+            if p.luck_level>=10:
                 return '소환 행운이 최대 단계입니다.'
             if p.gold<cost:
                 return f'소환 행운 강화에 {cost}코인이 필요해요.'
@@ -260,40 +312,28 @@ class Room:
                 return '강화 한도에 도달했거나 코인이 부족해요.'
             p.gold -= cost
             p.level += 1
-        elif typ in ('merge', 'move'):
-            u = next((u for u in p.units if u['id'] == data.get('id')), None)
-            if u is None:
-                return '포켓몬을 선택해 주세요.'
-            if typ == 'move':
-                cell = data.get('cell')
-                if type(cell) is not int or not 0 <= cell < MAX_UNITS:
-                    return '잘못된 배치 위치입니다.'
-                other = next((v for v in p.units if v['cell'] == cell), None)
-                if other:
-                    other['cell'] = u['cell']
-                u['cell'] = cell
+        elif typ=='quick_merge':
+            for u in sorted(p.units,key=lambda v:(v['cell'],v['id'])):
+                needed=3 if CATALOG[u['dex']]['evolution'] else 2
+                if u.get('enhance',0)<10 and sum(v['dex']==u['dex'] and v['power']==u['power'] and v.get('enhance',0)==u.get('enhance',0) for v in p.units)>=needed:
+                    return self.merge_unit(p,u)
+            return '합성할 동일 포켓몬이 부족해요.'
+        elif typ in ('merge','move'):
+            u=next((v for v in p.units if v['id']==data.get('id')),None)
+            if u is None:return '포켓몬을 선택해 주세요.'
+            if typ=='merge':return self.merge_unit(p,u)
+            cell=data.get('cell')
+            if type(cell) is not int or not 0<=cell<CELL_COUNT:return '잘못된 배치 위치입니다.'
+            if self.can_place(p,u['dex'],cell,u):
+                u['cell']=cell
                 return None
-            evolution = CATALOG[u['dex']]['evolution']
-            required = 3 if evolution else 2
-            same = [v for v in p.units if v['dex'] == u['dex'] and v['power'] == u['power'] and v.get('enhance',0)==u.get('enhance',0)]
-            if len(same) < required:
-                return f'같은 포켓몬·같은 강화 단계 {required}마리가 필요해요.'
-            if u.get('enhance',0) >= 10:
-                return '최대 합성 단계입니다.'
-            materials=[v for v in same if v is not u][:required-1]
-            u['xp']=u.get('xp',0)+sum(v.get('xp',0) for v in materials)
-            for v in materials:
-                p.units.remove(v)
-            previous_dex = u['dex']
-            if evolution:
-                u['dex'] = evolution
-                u['evolutions']=u.get('evolutions',0)+1
-            else:
-                u['enhance'] = u.get('enhance',0)+1
-            u['energy'], u['cooldown'] = 0, .5
-            self.effect(p, u, 'evolve', [], move=CATALOG[u['dex']]['name']+(f" +{u['enhance']}" if not evolution else ''),
-                        fromDex=previous_dex, enhanced=not bool(evolution))
+            other=[v for v in p.units if v['cell']==cell]
+            if len(other)==1 and self.can_place(p,other[0]['dex'],u['cell'],u):
+                other[0]['cell'],u['cell']=u['cell'],cell
+                return None
+            return '동일 포켓몬만 3마리까지, 최종형은 2마리까지 중첩할 수 있어요.'
         elif typ == 'raid':
+            if self.game_mode=='coop' or self.stage!='combat':return '경쟁전 일반 라운드에서만 습격할 수 있어요.'
             targets = [v for v in self.players.values() if v is not p and v.hp > 0]
             if not targets:
                 return '공격할 생존 상대가 없어요.'
@@ -316,14 +356,14 @@ class Room:
         variant = 'boss' if boss else ('runner' if self.spawned % 4 == 1 else
                    'armored' if self.wave >= 2 and self.spawned % 4 == 2 else
                    'shielded' if self.wave >= 3 and self.spawned % 4 == 3 else 'normal')
-        growth = 1.09 ** min(35,max(0,self.wave-1))
-        hp = (55 + self.wave ** 2 * 18) * growth * DIFFICULTIES[self.difficulty] * (10 if boss_rank == 'boss' else 5 if boss else 1.8 if raid else 1)
+        growth = 1.035 ** max(0,self.wave-1)
+        hp = (65 + self.wave ** 1.65 * 14) * growth * DIFFICULTIES[self.difficulty] * (10 if boss_rank == 'boss' else 5 if boss else 1.8 if raid else 1)
         hp *= .7 if variant == 'runner' else 1.4 if variant == 'armored' else 1
         flank = self.wave>=4 and not boss and not golden and not raid and self.spawned%4==3
         weakness = ('melee' if self.wave%10 else 'ranged') if boss else (
             'melee' if self.wave>=3 and self.spawned%5==2 else 'ranged' if self.wave>=3 and self.spawned%5==4 else None)
         p.enemies.append({'id': self.uid, 'progress': MAP.get('flankProgress',12.5) if flank else 0, 'flank':flank, 'hp': hp, 'maxHp': hp,
-                          'weakness':weakness,
+                          'weakness':weakness,'types':TYPES[dex],'types':TYPES[dex],
                           'boss': boss, 'bossRank': boss_rank, 'dex': dex, 'name': name,
                           'variant': variant, 'shield': hp * .5 if variant == 'shielded' else 0,
                           'raid': raid, 'golden': golden, 'slow': 0, 'slowFactor':1,
@@ -353,6 +393,11 @@ class Room:
             need=experience_need(u)
             if need and u['xp']>=need:
                 old=u['dex']
+                next_dex=CATALOG[old]['evolution']
+                destination=u['cell'] if self.can_place(p,next_dex,u['cell'],u) else self.summon_cell(p,next_dex)
+                if destination is None:
+                    continue
+                u['cell']=destination
                 u['xp']-=need
                 u['dex']=CATALOG[old]['evolution']
                 u['evolutions']=u.get('evolutions',0)+1
@@ -405,7 +450,7 @@ class Room:
         elif role=='psychic':
             e['expose'] = 5 if special else 3
 
-    def simulate(self, p, dt):
+    def simulate(self, p, dt, advance_enemies=True):
         p.effects = [f for f in p.effects if self.seconds - f['created'] < 1.7]
         p.raid_ready = max(0, p.raid_ready - dt)
         for u in p.units:
@@ -417,7 +462,7 @@ class Room:
             if u['cooldown'] > 0 and not special:
                 continue
             attack_range = d['ultimateRange'] if special else d['range']
-            targets = sorted((e for e in p.enemies if e['hp'] > 0 and math.dist((x, y), self.position(e['progress'])) <= attack_range),
+            targets = sorted((e for e in p.enemies if e['hp'] > 0 and (self.stage=='boss' or math.dist((x, y), self.position(e['progress'])) <= attack_range)),
                              key=lambda e: e['progress'], reverse=True)
             if not targets:
                 continue
@@ -435,22 +480,26 @@ class Room:
             for e in hit:
                 bonus = (1.25 if d['role']=='electric' and e.get('wet',0)>0 else 1) * (1.5 if e.get('expose',0)>0 else 1)
                 mode=d['ultimateMode'] if special else d['mode']
-                self.hurt(e, damage * bonus,mode)
+                multiplier=effectiveness(d['role'],e.get('types',()))
+                before=max(0,e['hp'])
+                self.hurt(e, damage * bonus * multiplier,mode)
+                dealt=before-max(0,e['hp'])
+                p.damage+=dealt
+                if self.stage=='boss':
+                    p.boss_damage+=dealt
+                    p.boss_round_damage+=dealt
                 if e.get('expose',0)>0:
                     e['expose'] = 0
-                self.inflict(e, d['role'], damage, special,mode)
+                if multiplier>0:
+                    burn=e.get('burnDps',0);poison=e.get('poisonBase',0)
+                    self.inflict(e, d['role'], damage*multiplier, special,mode)
+                    if d['role']=='fire' and damage*multiplier*.12>=burn:e['burnOwner']=p.slot
+                    if d['role']=='grass' and damage*multiplier*.06>=poison:e['poisonOwner']=p.slot
             self.effect(p, u, 'ultimate' if special else 'attack', hit,
                         move=d['ultimate'] if special else d['move'], damage=round(damage), critical=critical)
+        if not advance_enemies:return
         for e in p.enemies[:]:
-            for key in ('burn','poison'):
-                remaining = e.get(key,0)
-                if remaining>0:
-                    self.hurt(e,e.get(key+'Dps',0)*min(dt,remaining),e.get(key+'Mode'))
-                    e[key] = max(0,remaining-dt)
-                    if e[key] == 0:
-                        e[key+'Dps'] = 0
-                        if key=='poison':
-                            e['poisonStacks'] = e['poisonBase'] = 0
+            self.status_tick(e,dt)
             if e['hp'] <= 0:
                 p.enemies.remove(e)
                 p.gold += (60 if e.get('bossRank') == 'boss' else 25 if e['boss'] else 5) + (25 if e.get('golden') else 0)
@@ -461,21 +510,40 @@ class Room:
             immobilized = e.get('stun',0)>0
             for key in ('stun','paraImmune','curse','wet','expose'):
                 e[key] = max(0,e.get(key,0)-dt)
-            speed = (1.7 + min(1.3, self.wave * .035)) * (1.55 if e.get('variant') == 'runner' else .8 if e.get('variant') == 'armored' else 1)
+            speed = .85 * (1.7 + min(1.3, self.wave * .035)) * (1.55 if e.get('variant') == 'runner' else .8 if e.get('variant') == 'armored' else 1)
             e['progress'] += dt * speed * (0 if immobilized else e.get('slowFactor',.65) if e['slow'] else 1) * self.path_speed(e['progress'])
             if e['progress'] >= ROUTE_LENGTH:
                 p.enemies.remove(e)
-                p.hp = max(0, p.hp - (8 if e.get('bossRank') == 'boss' else 4 if e['boss'] else 2 if e['raid'] else 1))
+                self.leak(p,e)
         if p.hp <= 0:
             p.eliminated_at = self.seconds
             p.enemies.clear()
+
+    def status_tick(self,e,dt):
+        for key in ('burn','poison'):
+            remaining=e.get(key,0)
+            if remaining<=0:continue
+            before=max(0,e['hp'])
+            self.hurt(e,e.get(key+'Dps',0)*min(dt,remaining),e.get(key+'Mode'))
+            dealt=before-max(0,e['hp'])
+            owner=self.players.get(e.get(key+'Owner'))
+            if owner:
+                owner.damage+=dealt
+                if self.stage=='boss':
+                    owner.boss_damage+=dealt
+                    owner.boss_round_damage+=dealt
+            e[key]=max(0,remaining-dt)
+            if e[key]==0:
+                e[key+'Dps']=0
+                if key=='poison':e['poisonStacks']=e['poisonBase']=0
 
     async def snapshot(self):
         self.seq += 1
         await self.all({'type': 'state', 'seq': self.seq, 'phase': self.phase, 'wave': self.wave,
                         'speed': self.speed, 'capacity': MAX_UNITS,
-                        'difficulty': self.difficulty,
-                        'seconds': round(self.seconds, 1), 'nextWave': round(WAVE_LENGTH - self.seconds % WAVE_LENGTH, 1),
+                        'difficulty': self.difficulty,'gameMode':self.game_mode,'stage':self.stage,
+                        'stageLeft':round(self.stage_left,1),'teamHp':self.team_hp,'cleared':self.cleared,'boss':self.shared_boss,
+                        'seconds': round(self.seconds, 1), 'nextWave': round(self.stage_left,1),
                         'players': [p.public() for p in self.players.values()], 'result': self.result})
 
     def finish(self):
@@ -511,25 +579,9 @@ class Room:
             self.last_broadcast = now
             await self.snapshot()
 
-    def advance(self, dt):
-        self.seconds += dt
-        wave = int(self.seconds // WAVE_LENGTH) + 1
-        if wave != self.wave:
-            self.wave, self.spawned = wave, 0
-            for p in self.players.values():
-                if p.hp > 0:
-                    p.gold += 35 + wave * 2
-        wanted = min(20 + self.wave * 3, 54, int((self.seconds % WAVE_LENGTH) / .36) + 1)
-        while self.spawned < wanted:
-            for p in self.players.values():
-                if p.hp > 0:
-                    self.spawn(p, boss=self.wave % 5 == 0 and self.spawned == 0,
-                               golden=self.wave % 3 == 0 and self.spawned == 4)
-            self.spawned += 1
-        for p in self.players.values():
-            if p.hp > 0:
-                self.simulate(p, dt)
-        alive = [p for p in self.players.values() if p.hp > 0]
-        if not alive or (self.participants > 1 and len(alive) == 1):
-            self.finish()
+
+
+from campaign import Campaign
+class Room(Campaign,BattleRoom):
+    pass
 
