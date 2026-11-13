@@ -140,21 +140,19 @@ class RulesTests(unittest.IsolatedAsyncioTestCase):
             self.assertTrue(all(math.dist((x, y), Room.position(t / 10)) > .55
                                 for t in range(int(ROUTE_LENGTH * 10))))
 
-    async def test_terrain_bonus_applies_only_to_matching_type(self):
-        self.assertEqual(terrain_multiplier(1, 0), 1.25)
+    async def test_fire_region_damage_and_affinity(self):
+        self.assertEqual(terrain_multiplier(4, 5), 1.25)
+        self.assertEqual(terrain_multiplier(1, 5), 1.15)
         self.assertEqual(terrain_multiplier(4, 0), 1)
-        self.assertEqual(terrain_multiplier(7, 3), 1.25)
-        self.assertEqual(terrain_multiplier(25, 4), 1.25)
-        self.assertEqual(terrain_multiplier(1, 1), 1)
         r = await self.room(1)
         p = r.players[1]
         hits = []
-        for cell in (0, 1):
-            p.units = [{'id': 1, 'dex': 1, 'cell': cell, 'power': 1, 'cooldown': 0}]
+        for cell in (5, 3):
+            p.units = [{'id': 1, 'dex': 4, 'cell': cell, 'power': 1, 'cooldown': 0}]
             p.enemies = []
             r.spawn(p)
             e = p.enemies[0]
-            e['progress'] = near(p.units[0]['cell'])
+            e['progress'] = near(cell)
             e['types']=[]
             before = e['hp']
             with patch('defense.random.random', return_value=1), patch.object(Room,'inflict'):
@@ -199,7 +197,7 @@ class RulesTests(unittest.IsolatedAsyncioTestCase):
         damage = []
         # Same-tier Charmeleon and Ivysaur, same neutral tile and target.
         for dex in (5, 2):
-            p.units = [{'id': 100, 'dex': dex, 'cell': 1, 'power': 1, 'cooldown': 0}]
+            p.units = [{'id': 100, 'dex': dex, 'cell': 3, 'power': 1, 'cooldown': 0}]
             p.enemies = []
             r.spawn(p)
             e = p.enemies[0]
@@ -212,12 +210,12 @@ class RulesTests(unittest.IsolatedAsyncioTestCase):
         self.assertAlmostEqual(damage[0] / damage[1], 1.9*CATALOG[5]['movePower']/CATALOG[2]['movePower'])
         self.assertLess(CATALOG[5]['range'], CATALOG[2]['range'])
         for dex in (5, 2):
-            p.units = [{'id': 100, 'dex': dex, 'cell': 1, 'power': 1, 'cooldown': 0}]
+            p.units = [{'id': 100, 'dex': dex, 'cell': 3, 'power': 1, 'cooldown': 0}]
             p.enemies = []
             r.spawn(p)
             e = p.enemies[0]
             e['hp'] = 1000
-            e['progress'] = next(i/40 for i in range(int(ROUTE_LENGTH*40)) if 2.5<math.dist(MAP['cells'][1],Room.position(i/40))<3.5)
+            e['progress'] = next(i/40 for i in range(int(ROUTE_LENGTH*40)) if 1.25<math.dist(MAP['cells'][3],Room.position(i/40))<1.75)
             e['types']=[]
             r.simulate(p, .01)
             self.assertEqual(e['hp'] < 1000, dex == 2)
@@ -263,11 +261,12 @@ class RulesTests(unittest.IsolatedAsyncioTestCase):
         r.simulate(p, .05)
         self.assertNotIn(event['id'], [f['id'] for f in p.effects])
 
-    async def test_corner_tiles_cover_both_legs_for_melee(self):
-        for cell in MAP['cells']:
-            distances = [math.dist(cell, Room.position(t / 20)) for t in range(int(ROUTE_LENGTH * 20))]
-            self.assertLess(min(distances), 2.1)
-            self.assertGreater(sum(d <= 2.1 for d in distances), 15)
+    async def test_short_ranges_require_roadside_melee_placement(self):
+        nearest = lambda cell: min(math.dist(MAP['cells'][cell], Room.position(t / 40))
+                                   for t in range(int(ROUTE_LENGTH * 40)))
+        self.assertLess(nearest(0), CATALOG[4]['range'])
+        self.assertGreater(nearest(25), CATALOG[4]['range'])
+        self.assertLess(nearest(25), CATALOG[25]['range'])
 
     async def test_swap_and_merge_evolution_preserve_unique_cells(self):
         r = await self.room(1)
@@ -352,4 +351,5 @@ class NetworkTests(unittest.IsolatedAsyncioTestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
 

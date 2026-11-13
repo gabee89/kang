@@ -34,9 +34,13 @@ class CampaignNetworkTests(unittest.IsolatedAsyncioTestCase):
         await self.sockets[0].send_json({'type':'mode','value':'coop'})
         await self.receive(self.sockets[0],'room',lambda d:d['gameMode']=='coop')
         await self.sockets[0].send_json({'type':'start'})
+        previews=[]
         for ws in self.sockets:
             state=await self.receive(ws,'state')
             self.assertEqual((state['stage'],state['gameMode'],state['teamHp']),('prep','coop',60))
+            previews.append(state['roundPlan'])
+        self.assertTrue(all(p==previews[0] for p in previews))
+        self.assertEqual(previews[0]['round'],1)
         r=ROOMS[code];r.wave=9;r.start_round();r.shared_boss['hp']=r.shared_boss['maxHp']=100000
         for p in r.players.values():p.units=[fixtures.CampaignTests().unit(dex=150)]
         for ws in self.sockets:
@@ -54,4 +58,5 @@ class CampaignNetworkTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(response.status,200)
         self.assertEqual((await response.json())['entries'],[])
         self.assertEqual((await self.client.post('/api/leaderboard',json={'score':999999})).status,405)
+
 

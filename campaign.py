@@ -1,5 +1,6 @@
 """Fifty-round state machine and shared boss encounters. Combat remains authoritative."""
 import secrets
+from rounds import make_plan, damage_bonuses
 
 PREPARATION=8
 FINAL_ROUND=50
@@ -11,6 +12,10 @@ class Campaign:
         self.reset_campaign()
 
     def reset_campaign(self):
+        self.active_plan=None
+        self.next_plan=make_plan(1)
+        self._spawn_plan=None
+        self._spawn_wave=None
         self.stage='prep'
         self.stage_left=PREPARATION
         self.round_time=0
@@ -43,6 +48,7 @@ class Campaign:
 
     def start_round(self):
         self.wave+=1
+        self.active_plan=self.next_plan if self.next_plan['round']==self.wave else make_plan(self.wave)
         self.spawned=0
         self.round_time=0
         self.stage='boss' if self.wave%10==0 else 'combat'
@@ -79,6 +85,17 @@ class Campaign:
             self.stage='prep'
             self.stage_left=PREPARATION
             self.shared_boss=None
+            self.next_plan=make_plan(self.wave+1)
+
+    def encounter_plan(self):
+        if self.active_plan and self.active_plan['round']==self.wave:return self.active_plan
+        if self._spawn_wave!=self.wave:
+            self._spawn_plan=make_plan(max(1,self.wave))
+            self._spawn_wave=self.wave
+        return self._spawn_plan
+
+    def damage_bonuses(self):
+        return damage_bonuses(self.active_plan)
 
     def leak(self,p,e):
         if self.game_mode=='coop' and self.participants>1:
@@ -172,4 +189,5 @@ class Campaign:
             self.winner=ranked[0].slot if len(ranked)<2 or ranked[0].score>ranked[1].score else None
         self.result.update(winner=self.winner,completed=self.completed,gameMode=self.game_mode,runId=self.run_id,
                            difficulty=self.difficulty,scores=[p.public() for p in ranked])
+
 

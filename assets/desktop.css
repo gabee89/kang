@@ -3,16 +3,16 @@
 
 @media (min-width: 1201px), (min-width: 901px) and (min-height: 601px) {
   body.in-match {
-    --desktop-dock-height: 116px;
+    --desktop-dock-height: 104px;
     padding: 0;
     overflow: hidden;
   }
-  body.in-match > header { height: 52px; padding: 8px 24px; }
+  body.in-match > header { height: 40px; padding: 5px 24px; }
   body.in-match > header .logo { font-size: 22px; }
   body.in-match > footer { display: none; }
   body.in-match main {
     max-width: 1600px;
-    height: calc(100dvh - 52px);
+    height: calc(100dvh - 40px);
     min-height: 0;
     padding: 10px 18px calc(var(--desktop-dock-height) + 10px);
   }
@@ -21,18 +21,21 @@
     min-height: 0;
     display: grid;
     grid-template-rows: auto auto auto minmax(0, 1fr);
-    gap: 8px;
+    gap: 6px;
   }
   body.in-match .match-header { margin: 0; gap: 12px; }
-  body.in-match .match-header h1 { font-size: 24px; margin: 2px 0; }
+  body.in-match .match-header > div:first-child { display: flex; align-items: center; gap: 12px; }
+  body.in-match .match-header .eyebrow { font-size: 8px; max-width: 150px; }
+  body.in-match .match-header h1 { font-size: 21px; margin: 0; white-space: nowrap; }
   body.in-match .clock b { font-size: 22px; }
   body.in-match .clock small { margin-top: 2px; }
   body.in-match .fullscreen-btn { display: block; padding: 7px 12px; font-size: 11px; }
-  body.in-match .round-banner { margin: 0; padding: 7px 12px; font-size: 11px; }
+  body.in-match .round-banner { margin: 0; padding: 5px 12px; font-size: 11px; }
   body.in-match .scores { margin: 0; gap: 8px; }
-  body.in-match .score { padding: 8px 12px; }
-  body.in-match .score small { margin-top: 4px; font-size: 10px; }
-  body.in-match .life { margin-top: 6px; height: 3px; }
+  body.in-match .score { padding: 5px 10px; }
+  body.in-match .score strong { font-size: 11px; }
+  body.in-match .score small { margin-top: 2px; font-size: 9px; }
+  body.in-match .life { margin-top: 4px; height: 2px; }
   body.in-match .game-layout {
     min-height: 0;
     grid-template-columns: minmax(0, 1fr) 280px;
@@ -139,7 +142,7 @@
     flex: 1;
     min-width: 0;
     padding: 7px 4px;
-    min-height: 55px;
+    min-height: 48px;
     font-size: 12px;
     line-height: 1.5;
   }
@@ -157,4 +160,5 @@
   body.in-match .mobile-actions { gap: 4px; }
   body.in-match .mobile-actions button { font-size: 11px; }
 }
+
 

@@ -56,8 +56,30 @@ def luck_cost(level):
     return 100+level*90
 
 
-def terrain_multiplier(dex, cell):
-    return MAP['terrainBonus'] if CATALOG[dex]['role'] == MAP['terrain'][cell] else 1
+def region_info(cell):
+    return next((r for r in MAP.get('regions',[]) if r['id']==MAP['terrain'][cell]), {})
+
+
+def terrain_multiplier(dex, cell, special=False):
+    region,role=MAP['terrain'][cell],CATALOG[dex]['role']
+    if region=='fire':return 1.25 if role=='fire' else 1.15
+    if region=='electric' and special:return 1.3 if role=='electric' else 1.2
+    return 1
+
+
+def region_attack_interval(unit):
+    speed=(1.2 if CATALOG[unit['dex']]['role']=='grass' else 1.15) if MAP['terrain'][unit['cell']]=='grass' else 1
+    return attack_interval(unit,CATALOG)/speed
+
+
+def energy_multiplier(unit):
+    if MAP['terrain'][unit['cell']]!='water':return 1
+    return 1.4 if CATALOG[unit['dex']]['role'] in ('water','ice') else 1.25
+
+
+def critical_chance(unit):
+    if MAP['terrain'][unit['cell']]!='ghost':return .15
+    return .25 if CATALOG[unit['dex']]['role']=='ghost' else .20
 
 
 def sell_value(unit):
@@ -67,7 +89,7 @@ def sell_value(unit):
 def attack_damage(unit, level=0, special=False):
     d = CATALOG[unit['dex']]
     return (8 * 2.3 ** (d['tier']-1) * unit['power'] * (1+.18*level) * d['damageMultiplier']
-            * terrain_multiplier(unit['dex'],unit['cell']) * (1+.4*unit.get('enhance',0))
+            * terrain_multiplier(unit['dex'],unit['cell'],special) * (1+.4*unit.get('enhance',0))
             * d['growthBonus'] * (1+.15*unit.get('evolutions',0))
             * iv_factor(unit,'special' if special and d['ultimate']!='몸통박치기' or not special and d['mode']=='ranged' else 'attack')
             * (d['ultimatePower'] if special else d['movePower']))
@@ -102,7 +124,8 @@ class Player:
         self.rounds_cleared=0
         self.score=0
 
-    def public(self):
+    def public(self, weather=None):
+        weather=weather or {}
         return {'id': self.slot, 'name': self.name, 'hp': self.hp,
                 'score':self.score,'bossDamage':round(self.boss_damage),'bossRoundDamage':round(self.boss_round_damage),'damage':round(self.damage),'roundsCleared':self.rounds_cleared,
                 'gold': self.gold, 'level': self.level, 'kills': self.kills,
@@ -112,9 +135,10 @@ class Player:
                 'luckLevel':self.luck_level,'luckCost':luck_cost(self.luck_level),
                 'summonOdds':summon_odds(self.luck_level),
                 'units': [{**{k: v for k, v in u.items() if k != 'cooldown'}, 'sellValue': sell_value(u),
-                           'attackDamage':round(attack_damage(u,self.level),1),
-                           'ultimateDamage':round(attack_damage(u,self.level,True),1),
-                           'attackInterval':round(attack_interval(u,CATALOG),3),'ivGrade':iv_grade(u),
+                           'attackDamage':round(attack_damage(u,self.level)*weather.get(CATALOG[u['dex']]['role'],1),1),
+                           'ultimateDamage':round(attack_damage(u,self.level,True)*weather.get(CATALOG[u['dex']]['role'],1),1),
+                           'attackInterval':round(region_attack_interval(u),3),'ivGrade':iv_grade(u),
+                           'region':region_info(u['cell']),'criticalChance':critical_chance(u),
                            'xpNeed':experience_need(u)} for u in self.units],
                 'enemies': [{k: v for k, v in e.items() if k not in ('burnDps','poisonDps','paraImmune')} for e in self.enemies],
                 'effects': self.effects}
@@ -217,9 +241,11 @@ class BattleRoom:
         return 3 if CATALOG[dex]['evolution'] else 2
 
     def summon_cell(self,p,dex):
-        empty=next((i for i in range(CELL_COUNT) if not any(u['cell']==i for u in p.units)),None)
-        if empty is not None:return empty
-        return next((i for i in range(CELL_COUNT) if self.can_place(p,dex,i)),None)
+        # Fill a matching stack before opening another cell, including moved units.
+        matching=sorted({u['cell'] for u in p.units if u['dex']==dex})
+        for cell in matching:
+            if self.can_place(p,dex,cell):return cell
+        return next((i for i in range(CELL_COUNT) if not any(u['cell']==i for u in p.units)),None)
 
     def can_place(self,p,dex,cell,exclude=None):
         occupants=[u for u in p.units if u['cell']==cell and u is not exclude]
@@ -350,20 +376,21 @@ class BattleRoom:
         self.uid += 1
         if boss and boss_rank is None:
             boss_rank = 'boss' if self.wave % 10 == 0 else 'elite'
-        dex = (149 if boss_rank == 'boss' else 95 if boss else
-               52 if golden else (19, 41, 46, 74, 23, 48, 66, 111)[(max(0, self.wave - 1) + self.uid % 3) % 8])
+        plan=self.encounter_plan()
+        dex = 149 if boss_rank == 'boss' else 95 if boss else plan['dex']
         name = {19:'꼬렛',41:'주뱃',46:'파라스',74:'꼬마돌',23:'아보',48:'콘팡',66:'알통몬',111:'뿔카노',52:'황금 나옹',95:'중간보스 롱스톤',149:'보스 망나뇽'}[dex]
+        if golden and not boss:name='황금 '+name
         variant = 'boss' if boss else ('runner' if self.spawned % 4 == 1 else
                    'armored' if self.wave >= 2 and self.spawned % 4 == 2 else
                    'shielded' if self.wave >= 3 and self.spawned % 4 == 3 else 'normal')
         growth = 1.035 ** max(0,self.wave-1)
         hp = (65 + self.wave ** 1.65 * 14) * growth * DIFFICULTIES[self.difficulty] * (10 if boss_rank == 'boss' else 5 if boss else 1.8 if raid else 1)
         hp *= .7 if variant == 'runner' else 1.4 if variant == 'armored' else 1
-        flank = self.wave>=4 and not boss and not golden and not raid and self.spawned%4==3
+        flank = plan['entry']=='shortcut' and not boss
         weakness = ('melee' if self.wave%10 else 'ranged') if boss else (
             'melee' if self.wave>=3 and self.spawned%5==2 else 'ranged' if self.wave>=3 and self.spawned%5==4 else None)
         p.enemies.append({'id': self.uid, 'progress': MAP.get('flankProgress',12.5) if flank else 0, 'flank':flank, 'hp': hp, 'maxHp': hp,
-                          'weakness':weakness,'types':TYPES[dex],'types':TYPES[dex],
+                          'weakness':weakness,'types':TYPES[dex],
                           'boss': boss, 'bossRank': boss_rank, 'dex': dex, 'name': name,
                           'variant': variant, 'shield': hp * .5 if variant == 'shielded' else 0,
                           'raid': raid, 'golden': golden, 'slow': 0, 'slowFactor':1,
@@ -454,7 +481,7 @@ class BattleRoom:
         p.effects = [f for f in p.effects if self.seconds - f['created'] < 1.7]
         p.raid_ready = max(0, p.raid_ready - dt)
         for u in p.units:
-            u['energy'] = min(100, u.get('energy', 0) + dt * 7)
+            u['energy'] = min(100, u.get('energy', 0) + dt * 7 * energy_multiplier(u))
             u['cooldown'] -= dt
             d = CATALOG[u['dex']]
             x, y = MAP['cells'][u['cell']]
@@ -466,16 +493,16 @@ class BattleRoom:
                              key=lambda e: e['progress'], reverse=True)
             if not targets:
                 continue
-            u['cooldown'] = attack_interval(u,CATALOG)
-            damage = attack_damage(u,p.level,special)
-            critical = random.random() < .15
+            u['cooldown'] = region_attack_interval(u)
+            damage = attack_damage(u,p.level,special)*self.damage_bonuses().get(d['role'],1)
+            critical = random.random() < critical_chance(u)
             if critical:
                 damage *= 2
             if special:
                 u['energy'] = 0
                 hit = targets[:8]
             else:
-                u['energy'] = min(100, u['energy'] + 18)
+                u['energy'] = min(100, u['energy'] + 18 * energy_multiplier(u))
                 hit = targets[:3] if d['mode'] == 'ranged' and d['role'] in ('fire', 'electric', 'psychic') else targets[:1]
             for e in hit:
                 bonus = (1.25 if d['role']=='electric' and e.get('wet',0)>0 else 1) * (1.5 if e.get('expose',0)>0 else 1)
@@ -538,13 +565,16 @@ class BattleRoom:
                 if key=='poison':e['poisonStacks']=e['poisonBase']=0
 
     async def snapshot(self):
+        from rounds import damage_bonuses
+        weather=damage_bonuses(self.next_plan) if self.stage=='prep' else self.damage_bonuses()
         self.seq += 1
         await self.all({'type': 'state', 'seq': self.seq, 'phase': self.phase, 'wave': self.wave,
                         'speed': self.speed, 'capacity': MAX_UNITS,
                         'difficulty': self.difficulty,'gameMode':self.game_mode,'stage':self.stage,
+                        'roundPlan':self.next_plan if self.stage=='prep' else self.active_plan,
                         'stageLeft':round(self.stage_left,1),'teamHp':self.team_hp,'cleared':self.cleared,'boss':self.shared_boss,
                         'seconds': round(self.seconds, 1), 'nextWave': round(self.stage_left,1),
-                        'players': [p.public() for p in self.players.values()], 'result': self.result})
+                        'players': [p.public(weather) for p in self.players.values()], 'result': self.result})
 
     def finish(self):
         self.phase = 'finished'
@@ -584,4 +614,5 @@ class BattleRoom:
 from campaign import Campaign
 class Room(Campaign,BattleRoom):
     pass
+
 
