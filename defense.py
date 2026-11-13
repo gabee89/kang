@@ -34,7 +34,7 @@ for line in ((1,2,3),(4,5,6),(7,8,9),(92,93,94),(25,26),(129,130),(131,),(144,),
         CATALOG[dex].update({'lineLength':len(line),'stage':stage+1,
                             'growthBonus':(1,1.3,1.9)[stage] if len(line)==3 else (1,1.8)[stage] if len(line)==2 else 1.2})
 WAVE_LENGTH = 90
-DIFFICULTIES = {'normal': .8, 'challenge': 1.25, 'extreme': 1.8}
+DIFFICULTIES = {'normal': .75, 'challenge': 1.15, 'extreme': 1.7}
 MAP = json.loads((Path(__file__).parent / 'assets' / 'map.json').read_text(encoding='utf-8'))
 CELL_COUNT = len(MAP['cells'])
 MAX_UNITS = CELL_COUNT*3
@@ -112,7 +112,7 @@ class Player:
         self.slot, self.token, self.ws = slot, token, ws
         self.name=f'트레이너 {slot}'
         self.last_seen = time.monotonic()
-        self.hp, self.gold, self.level, self.kills = 20, 160, 0, 0
+        self.hp, self.gold, self.level, self.kills = 20, 200, 0, 0
         self.units, self.enemies, self.effects = [], [], []
         self.eliminated_at = None
         self.last_action = -100
@@ -350,14 +350,17 @@ class BattleRoom:
             if typ=='merge':return self.merge_unit(p,u)
             cell=data.get('cell')
             if type(cell) is not int or not 0<=cell<CELL_COUNT:return '잘못된 배치 위치입니다.'
-            if self.can_place(p,u['dex'],cell,u):
-                u['cell']=cell
-                return None
+            origin=u['cell']
+            if cell==origin:return None
+            group=[v for v in p.units if v['cell']==origin]
             other=[v for v in p.units if v['cell']==cell]
-            if len(other)==1 and self.can_place(p,other[0]['dex'],u['cell'],u):
-                other[0]['cell'],u['cell']=u['cell'],cell
-                return None
-            return '동일 포켓몬만 3마리까지, 최종형은 2마리까지 중첩할 수 있어요.'
+            if other and other[0]['dex']==u['dex'] and len(group)+len(other)>self.stack_limit(u['dex']):
+                return '묶음을 놓기에는 칸이 부족해요. 중첩된 포켓몬은 함께 이동합니다.'
+            # Move, combine, or swap entire stacks atomically; never peel off a unit.
+            if other and other[0]['dex']!=u['dex']:
+                for v in other:v['cell']=origin
+            for v in group:v['cell']=cell
+            return None
         elif typ == 'raid':
             if self.game_mode=='coop' or self.stage!='combat':return '경쟁전 일반 라운드에서만 습격할 수 있어요.'
             targets = [v for v in self.players.values() if v is not p and v.hp > 0]
@@ -387,9 +390,14 @@ class BattleRoom:
         hp = (65 + self.wave ** 1.65 * 14) * growth * DIFFICULTIES[self.difficulty] * (10 if boss_rank == 'boss' else 5 if boss else 1.8 if raid else 1)
         hp *= .7 if variant == 'runner' else 1.4 if variant == 'armored' else 1
         flank = plan['entry']=='shortcut' and not boss
+        direction=plan.get('direction',1)
+        progress=(ROUTE_LENGTH-MAP['flankProgress'] if direction==-1 else MAP['flankProgress']) if flank else 0
+        if flank:
+            # Short entries offer less firing time; reduce durability accordingly.
+            hp*=max(.65,math.sqrt((ROUTE_LENGTH-progress)/ROUTE_LENGTH))
         weakness = ('melee' if self.wave%10 else 'ranged') if boss else (
             'melee' if self.wave>=3 and self.spawned%5==2 else 'ranged' if self.wave>=3 and self.spawned%5==4 else None)
-        p.enemies.append({'id': self.uid, 'progress': MAP.get('flankProgress',12.5) if flank else 0, 'flank':flank, 'hp': hp, 'maxHp': hp,
+        p.enemies.append({'id': self.uid, 'progress': progress, 'direction':direction, 'flank':flank, 'hp': hp, 'maxHp': hp,
                           'weakness':weakness,'types':TYPES[dex],
                           'boss': boss, 'bossRank': boss_rank, 'dex': dex, 'name': name,
                           'variant': variant, 'shield': hp * .5 if variant == 'shielded' else 0,
@@ -412,6 +420,10 @@ class BattleRoom:
     @staticmethod
     def path_speed(progress):
         return next((z['speed'] for z in MAP['zones'] if z['start'] <= progress < z['end']), 1)
+
+    def enemy_position(self,enemy):
+        progress=enemy['progress']
+        return self.position(ROUTE_LENGTH-progress if enemy.get('direction',1)==-1 else progress)
 
     def gain_experience(self,p):
         # One point per kill for each deployed unit; never controlled by the client.
@@ -437,7 +449,7 @@ class BattleRoom:
         d = CATALOG[u['dex']]
         p.effects.append({'id': self.effect_seq, 'kind': kind, 'unit': u['id'], 'cell': u['cell'],
                           'dex': u['dex'], 'role': d['role'], 'mode': d['mode'], 'style': d['style'],
-                          'created': self.seconds, 'targets': [e['progress'] for e in targets],
+                          'created': self.seconds, 'targets': [ROUTE_LENGTH-e['progress'] if e.get('direction',1)==-1 else e['progress'] for e in targets],
                           'victims': [e['id'] for e in targets], **extra})
         p.effects = p.effects[-80:]
 
@@ -489,7 +501,7 @@ class BattleRoom:
             if u['cooldown'] > 0 and not special:
                 continue
             attack_range = d['ultimateRange'] if special else d['range']
-            targets = sorted((e for e in p.enemies if e['hp'] > 0 and (self.stage=='boss' or math.dist((x, y), self.position(e['progress'])) <= attack_range)),
+            targets = sorted((e for e in p.enemies if e['hp'] > 0 and (self.stage=='boss' or math.dist((x, y), self.enemy_position(e)) <= attack_range)),
                              key=lambda e: e['progress'], reverse=True)
             if not targets:
                 continue
@@ -538,7 +550,8 @@ class BattleRoom:
             for key in ('stun','paraImmune','curse','wet','expose'):
                 e[key] = max(0,e.get(key,0)-dt)
             speed = .85 * (1.7 + min(1.3, self.wave * .035)) * (1.55 if e.get('variant') == 'runner' else .8 if e.get('variant') == 'armored' else 1)
-            e['progress'] += dt * speed * (0 if immobilized else e.get('slowFactor',.65) if e['slow'] else 1) * self.path_speed(e['progress'])
+            canonical=ROUTE_LENGTH-e['progress'] if e.get('direction',1)==-1 else e['progress']
+            e['progress'] += dt * speed * (0 if immobilized else e.get('slowFactor',.65) if e['slow'] else 1) * self.path_speed(canonical)
             if e['progress'] >= ROUTE_LENGTH:
                 p.enemies.remove(e)
                 self.leak(p,e)

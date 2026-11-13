@@ -22,12 +22,14 @@ def make_plan(number):
     theme, theme_name = THEMES[min(4, max(0, (number-1)//10))]
     boss = number % 10 == 0
     shortcut = number % 4 == 0 and not boss
+    direction = -1 if random.getrandbits(1) else 1
     plan = {'round':number, 'dex':149 if boss else dex,
             'name':'공동 보스 망나뇽' if boss else ENEMIES[dex],
             'types':['dragon','flying'] if boss else list(TYPES[dex]),
             'weather':weather, 'weatherName':name, 'weatherHint':hint,
             'theme':theme, 'themeName':theme_name,
             'entry':'shortcut' if shortcut else 'main',
+            'direction':direction, 'directionName':'역방향' if direction==-1 else '정방향',
             'entryName':'샛길 개방 · 중간 포털 진입' if shortcut else '기본 포털 진입'}
     plan['matchups']={role:round(effectiveness(role,plan['types'])*WEATHER[weather][2].get(role,1),2)
                       for role in ('grass','fire','water','electric','ice','ghost','psychic')}

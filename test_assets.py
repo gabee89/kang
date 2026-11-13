@@ -18,10 +18,11 @@ class AssetTests(unittest.TestCase):
                 self.assertEqual(data[:8],b'\x89PNG\r\n\x1a\n')
                 self.assertEqual(struct.unpack('>II',data[16:24]),(width,96))
 
-    def test_36_slots_do_not_overlap(self):
-        self.assertEqual(len(MAP['cells']),36)
-        self.assertEqual(len(MAP['terrain']),36)
+    def test_24_slots_do_not_overlap(self):
+        self.assertEqual(len(MAP['cells']),24)
+        self.assertEqual(len(MAP['terrain']),24)
         for i,(x,y) in enumerate(MAP['cells']):
             for a,b in MAP['cells'][i+1:]:
                 self.assertTrue(abs(x-a)*77>=MAP['tileWidth'] or abs(y-b)*76>=MAP['tileHeight'])
+
 

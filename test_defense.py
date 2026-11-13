@@ -4,7 +4,7 @@ import unittest
 import math
 from unittest.mock import patch
 from aiohttp.test_utils import TestClient, TestServer
-from defense import Room, ROUTE_LENGTH, terrain_multiplier, MAP, CATALOG, MAX_UNITS, WAVE_LENGTH
+from defense import Room, ROUTE_LENGTH, terrain_multiplier, MAP, CATALOG, MAX_UNITS, WAVE_LENGTH, CELL_COUNT
 from server import create_app, ROOMS
 
 
@@ -44,11 +44,11 @@ class RulesTests(unittest.IsolatedAsyncioTestCase):
         r = await self.room(3)
         p, q, _ = r.players.values()
         self.assertIsNone(self.action(r, p, type='summon'))
-        self.assertEqual((p.gold, q.gold), (120, 160))
+        self.assertEqual((p.gold, q.gold), (160, 200))
         p.gold = 0
         self.assertIsNotNone(self.action(r, p, type='summon'))
         p.gold = 10000
-        p.units=[{'id':100+i,'dex':1,'cell':i%36,'power':1,'cooldown':0} for i in range(MAX_UNITS)]
+        p.units=[{'id':100+i,'dex':1,'cell':i%CELL_COUNT,'power':1,'cooldown':0} for i in range(MAX_UNITS)]
         gold = p.gold
         self.assertIsNotNone(self.action(r, p, type='summon'))
         self.assertEqual(p.gold, gold)
@@ -68,11 +68,11 @@ class RulesTests(unittest.IsolatedAsyncioTestCase):
         r = await self.room(3)
         p, q, z = r.players.values()
         self.assertIsNone(self.action(r, p, type='raid'))
-        self.assertEqual(p.gold, 80)
+        self.assertEqual(p.gold, 120)
         self.assertEqual(len(p.enemies), 0)
         self.assertEqual([len(v.enemies) for v in (q, z)], [1, 1])
         self.assertIsNotNone(self.action(r, p, type='raid'))
-        self.assertEqual(p.gold, 80)
+        self.assertEqual(p.gold, 120)
 
     async def test_disconnect_does_not_pause_and_allows_secure_rejoin(self):
         r = await self.room(3)
@@ -179,7 +179,7 @@ class RulesTests(unittest.IsolatedAsyncioTestCase):
         r = await self.room(3)
         r.wave=2
         r.start_round()
-        r.round_time=4*.48
+        r.round_time=4*.54
         await r.tick(.01)
         for p in r.players.values():
             self.assertEqual(sum(bool(e.get('golden')) for e in p.enemies), 1)
@@ -265,8 +265,8 @@ class RulesTests(unittest.IsolatedAsyncioTestCase):
         nearest = lambda cell: min(math.dist(MAP['cells'][cell], Room.position(t / 40))
                                    for t in range(int(ROUTE_LENGTH * 40)))
         self.assertLess(nearest(0), CATALOG[4]['range'])
-        self.assertGreater(nearest(25), CATALOG[4]['range'])
-        self.assertLess(nearest(25), CATALOG[25]['range'])
+        self.assertGreater(nearest(13), CATALOG[4]['range'])
+        self.assertLess(nearest(13), CATALOG[25]['range'])
 
     async def test_swap_and_merge_evolution_preserve_unique_cells(self):
         r = await self.room(1)

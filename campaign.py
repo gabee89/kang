@@ -2,7 +2,7 @@
 import secrets
 from rounds import make_plan, damage_bonuses
 
-PREPARATION=8
+PREPARATION=10
 FINAL_ROUND=50
 
 class Campaign:
@@ -56,7 +56,7 @@ class Campaign:
         for p in self.players.values():
             p.effects=[]
             if p.hp>0:
-                p.gold+=35+self.wave*2
+                p.gold+=40+self.wave*2
         if self.stage=='boss':
             alive=[p for p in self.players.values() if p.hp>0]
             if not alive:return
@@ -65,7 +65,7 @@ class Campaign:
             boss.update(progress=0,flank=False,types=('dragon','flying'),weakness=None)
             # Scale with the round and participants, never with current DPS.
             from defense import DIFFICULTIES
-            boss['hp']=boss['maxHp']=(3500+self.wave**2*35)*len(alive)*DIFFICULTIES[self.difficulty]
+            boss['hp']=boss['maxHp']=(3300+self.wave**2*33)*len(alive)*DIFFICULTIES[self.difficulty]
             self.shared_boss=boss
             for p in self.players.values():
                 p.boss_round_damage=0
@@ -91,6 +91,7 @@ class Campaign:
         if self.active_plan and self.active_plan['round']==self.wave:return self.active_plan
         if self._spawn_wave!=self.wave:
             self._spawn_plan=make_plan(max(1,self.wave))
+            self._spawn_plan['direction']=1
             self._spawn_wave=self.wave
         return self._spawn_plan
 
@@ -103,7 +104,10 @@ class Campaign:
             alive=sorted((v for v in self.players.values() if v.hp>0),key=lambda v:v.slot)
             if alive and self.team_hp>0:
                 target=next((v for v in alive if v.slot>p.slot),alive[0])
-                e.update(progress=0,flank=False,passes=e.get('passes',0)+1)
+                entry=self.encounter_plan()['entry']=='shortcut'
+                from defense import MAP, ROUTE_LENGTH
+                progress=(ROUTE_LENGTH-MAP['flankProgress'] if e.get('direction',1)==-1 else MAP['flankProgress']) if entry else 0
+                e.update(progress=progress,flank=entry,passes=e.get('passes',0)+1)
                 # Deferred until everyone has simulated: no double movement this tick.
                 self.transfers.append((target,e))
             if self.team_hp<=0:
@@ -151,8 +155,9 @@ class Campaign:
             if self.stage=='boss':
                 self.boss_step(dt)
             else:
-                total=min(18+self.wave*2,48)
-                wanted=min(total,int(self.round_time/.48)+1)
+                total=min(16+self.wave*2,44)
+                if self.encounter_plan()['entry']=='shortcut':total=max(8,int(total*.8))
+                wanted=min(total,int(self.round_time/.54)+1)
                 while self.spawned<wanted:
                     for p in self.players.values():
                         if p.hp>0:self.spawn(p,boss=self.wave%5==0 and self.spawned==0,golden=self.wave%3==0 and self.spawned==4)
