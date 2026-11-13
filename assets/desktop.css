@@ -1,0 +1,160 @@
+/* Keep the battlefield and frequent actions visible together on desktop. */
+.battlefield-viewport { display: contents; }
+
+@media (min-width: 1201px), (min-width: 901px) and (min-height: 601px) {
+  body.in-match {
+    --desktop-dock-height: 116px;
+    padding: 0;
+    overflow: hidden;
+  }
+  body.in-match > header { height: 52px; padding: 8px 24px; }
+  body.in-match > header .logo { font-size: 22px; }
+  body.in-match > footer { display: none; }
+  body.in-match main {
+    max-width: 1600px;
+    height: calc(100dvh - 52px);
+    min-height: 0;
+    padding: 10px 18px calc(var(--desktop-dock-height) + 10px);
+  }
+  body.in-match #match {
+    height: 100%;
+    min-height: 0;
+    display: grid;
+    grid-template-rows: auto auto auto minmax(0, 1fr);
+    gap: 8px;
+  }
+  body.in-match .match-header { margin: 0; gap: 12px; }
+  body.in-match .match-header h1 { font-size: 24px; margin: 2px 0; }
+  body.in-match .clock b { font-size: 22px; }
+  body.in-match .clock small { margin-top: 2px; }
+  body.in-match .fullscreen-btn { display: block; padding: 7px 12px; font-size: 11px; }
+  body.in-match .round-banner { margin: 0; padding: 7px 12px; font-size: 11px; }
+  body.in-match .scores { margin: 0; gap: 8px; }
+  body.in-match .score { padding: 8px 12px; }
+  body.in-match .score small { margin-top: 4px; font-size: 10px; }
+  body.in-match .life { margin-top: 6px; height: 3px; }
+  body.in-match .game-layout {
+    min-height: 0;
+    grid-template-columns: minmax(0, 1fr) 280px;
+    gap: 12px;
+  }
+  body.in-match .arena {
+    height: 100%;
+    min-height: 0;
+    align-self: stretch;
+    display: flex;
+    flex-direction: column;
+    padding: 10px;
+    border-radius: 14px;
+  }
+  body.in-match .arena-title { flex: none; padding: 0 4px 6px; font-size: 12px; }
+  body.in-match .battlefield-viewport {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex: 1;
+    min-width: 0;
+    min-height: 0;
+  }
+  body.in-match #game {
+    flex: none;
+    width: auto;
+    height: auto;
+    max-width: 100%;
+    max-height: 100%;
+    min-width: 0;
+    min-height: 0;
+    border-radius: 8px;
+  }
+  body.in-match .map-legend,
+  body.in-match .weakness-guide,
+  body.in-match .field-hint { display: none; }
+  body.in-match .rivals { flex: none; margin-top: 6px; gap: 5px; }
+  body.in-match .rivals button { padding: 5px 9px; font-size: 10px; }
+  body.in-match .roster { flex: none; margin-top: 4px; max-height: 28%; overflow: auto; }
+  body.in-match .roster summary { padding: 5px 8px; font-size: 11px; }
+  body.in-match .game-layout aside {
+    display: grid;
+    position: static;
+    min-height: 0;
+    overflow: auto;
+    overscroll-behavior: contain;
+    scrollbar-gutter: stable;
+    align-content: start;
+    gap: 10px;
+  }
+  body.in-match aside .panel { padding: 14px; border-radius: 14px; }
+  body.in-match aside .economy { display: none; }
+  body.in-match aside #sell,
+  body.in-match aside #merge,
+  body.in-match aside #quickMerge { display: none; }
+  body.in-match .selected .selection-card { min-height: 56px; margin-top: 8px; }
+  body.in-match .selected img { width: 56px; height: 56px; }
+  body.in-match .boss-alert { flex: none; padding: 6px 8px; margin-bottom: 6px; font-size: 10px; }
+  body.in-match .mobile-bar {
+    display: grid;
+    grid-template-columns: 135px minmax(0, 1fr) 180px;
+    grid-template-rows: auto auto;
+    gap: 6px 12px;
+    position: fixed;
+    inset: auto 0 0;
+    height: var(--desktop-dock-height);
+    padding: 10px max(18px, calc((100vw - 1564px) / 2));
+    z-index: 60;
+    border-top: 1px solid #98b79b88;
+    box-shadow: 0 -8px 24px #071e2470;
+  }
+  body.in-match .mobile-wallet {
+    grid-column: 1;
+    grid-row: 1 / 3;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: center;
+    gap: 8px;
+  }
+  body.in-match #mobileGold { font-size: 24px; color: #e9d28a; }
+  body.in-match #mobileCount { font-size: 11px; color: #c5d9bd; }
+  body.in-match #mobileDetail { display: none; }
+  body.in-match .mobile-selection {
+    grid-column: 2;
+    grid-row: 1;
+    min-width: 0;
+    margin: 0;
+    font-size: 11px;
+    line-height: 18px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: #d4e8bb;
+  }
+  body.in-match .mobile-actions {
+    grid-column: 2;
+    grid-row: 2;
+    display: flex;
+    gap: 7px;
+    min-width: 0;
+  }
+  body.in-match .mobile-actions button {
+    flex: 1;
+    min-width: 0;
+    padding: 7px 4px;
+    min-height: 55px;
+    font-size: 12px;
+    line-height: 1.5;
+  }
+  body.in-match .mobile-actions small { font-size: 9px; font-weight: 500; }
+  body.in-match #mobileQuick { border-color: #e9d28a; color: #f3e4b3; }
+  body.in-match #mobileLuck { grid-column: 3; grid-row: 2; margin: 0; padding: 6px; font-size: 11px; }
+  body.in-match #mobileOdds { grid-column: 3; grid-row: 1; margin: 0; font-size: 10px; align-self: center; }
+  body.in-match #toasts { bottom: calc(var(--desktop-dock-height) + 12px); z-index: 75; }
+}
+
+@media (min-width: 901px) and (max-width: 1100px) and (min-height: 601px) {
+  body.in-match .game-layout { grid-template-columns: minmax(0, 1fr) 245px; }
+  body.in-match .mobile-bar { grid-template-columns: 100px minmax(0, 1fr) 140px; gap: 6px 8px; padding-inline: 12px; }
+  body.in-match #mobileGold { font-size: 20px; }
+  body.in-match .mobile-actions { gap: 4px; }
+  body.in-match .mobile-actions button { font-size: 11px; }
+}
+
