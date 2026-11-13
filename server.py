@@ -104,7 +104,7 @@ async def websocket_handler(request):
                     await room.send_to(participant, {'type': 'error', 'message': error})
                 else:
                     await room.broadcast_room()
-            elif typ in ('summon', 'merge', 'move', 'upgrade', 'raid', 'sell', 'speed', 'luck','quick_merge'):
+            elif typ in ('summon', 'merge', 'move', 'upgrade', 'raid', 'sell', 'speed', 'luck','quick_merge','choose_card','support'):
                 error = room.action(participant, payload)
                 if error:
                     await room.send_to(participant, {'type': 'error', 'message': error})
@@ -215,4 +215,5 @@ def create_app():
 if __name__ == '__main__':
     logging.basicConfig(level=logging.INFO)
     web.run_app(create_app(), host='0.0.0.0', port=int(os.environ.get('PORT', 8080)))
+
 

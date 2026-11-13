@@ -25,7 +25,7 @@ class RoundEventTests(unittest.IsolatedAsyncioTestCase):
     async def test_preview_roll_is_used_once_and_shared_by_every_player(self):
         room=await self.room()
         preview=dict(room.next_plan)
-        with patch('rounds.random.choice', side_effect=AssertionError('round must use preview')):
+        with patch('campaign.make_plan', side_effect=AssertionError('round must use preview')):
             room.start_round()
             for i in range(8):
                 room.spawned=i

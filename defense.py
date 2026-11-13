@@ -9,6 +9,7 @@ from pathlib import Path
 from moves import profile
 from individuals import roll_ivs, iv_factor, attack_interval, iv_grade
 from elements import TYPES, effectiveness
+from adventure import Adventure,new_progress,public_progress,refresh_traits,modifiers,kill_reward,BONUS_CAPS
 
 # id, Korean name, evolution, role, tier
 DEX = [
@@ -102,6 +103,12 @@ def experience_need(unit):
     return 650 if d['lineLength']==2 else 400 if d['stage']==1 else 1000
 
 
+def combat_damage(p,u,special=False,weather=1,key='damage'):
+    region=terrain_multiplier(u['dex'],u['cell'],special)
+    combined=min(BONUS_CAPS['combinedDamage'],region*weather*modifiers(p,u,special)[key])
+    return attack_damage(u,p.level,special)*combined/region
+
+
 def weakness_multiplier(enemy,mode):
     weakness=enemy.get('weakness')
     return (1.6 if weakness==mode else .55) if weakness in ('melee','ranged') and mode in ('melee','ranged') else 1
@@ -123,22 +130,25 @@ class Player:
         self.damage=0
         self.rounds_cleared=0
         self.score=0
+        self.progress=new_progress()
 
     def public(self, weather=None):
         weather=weather or {}
+        refresh_traits(self)
         return {'id': self.slot, 'name': self.name, 'hp': self.hp,
                 'score':self.score,'bossDamage':round(self.boss_damage),'bossRoundDamage':round(self.boss_round_damage),'damage':round(self.damage),'roundsCleared':self.rounds_cleared,
                 'gold': self.gold, 'level': self.level, 'kills': self.kills,
+                'adventure':public_progress(self),
                 'connected': self.ws is not None and not self.ws.closed,
                 'alive': self.hp > 0, 'eliminatedAt': self.eliminated_at,
                 'raidReady': round(self.raid_ready, 1),
                 'luckLevel':self.luck_level,'luckCost':luck_cost(self.luck_level),
                 'summonOdds':summon_odds(self.luck_level),
                 'units': [{**{k: v for k, v in u.items() if k != 'cooldown'}, 'sellValue': sell_value(u),
-                           'attackDamage':round(attack_damage(u,self.level)*weather.get(CATALOG[u['dex']]['role'],1),1),
-                           'ultimateDamage':round(attack_damage(u,self.level,True)*weather.get(CATALOG[u['dex']]['role'],1),1),
-                           'attackInterval':round(region_attack_interval(u),3),'ivGrade':iv_grade(u),
-                           'region':region_info(u['cell']),'criticalChance':critical_chance(u),
+                           'attackDamage':round(combat_damage(self,u,False,weather.get(CATALOG[u['dex']]['role'],1)),1),
+                           'ultimateDamage':round(combat_damage(self,u,True,weather.get(CATALOG[u['dex']]['role'],1)),1),
+                           'attackInterval':round(region_attack_interval(u)/modifiers(self,u)['speed'],3),'ivGrade':iv_grade(u),
+                           'region':region_info(u['cell']),'criticalChance':min(BONUS_CAPS['crit'],critical_chance(u)+modifiers(self,u)['crit']),
                            'xpNeed':experience_need(u)} for u in self.units],
                 'enemies': [{k: v for k, v in e.items() if k not in ('burnDps','poisonDps','paraImmune')} for e in self.enemies],
                 'effects': self.effects}
@@ -462,7 +472,7 @@ class BattleRoom:
 
     @staticmethod
     def hurt(e, damage, mode=None):
-        dealt = damage * weakness_multiplier(e,mode) * (.7 if e.get('variant') == 'armored' else 1) * (1.15 if e.get('curse',0)>0 else 1)
+        dealt = damage * weakness_multiplier(e,mode) * (.7 if e.get('variant') == 'armored' else 1) * (1.15 if e.get('curse',0)>0 else 1) * (1.15 if e.get('exposed',0)>0 else 1)
         blocked = min(e.get('shield',0), dealt)
         e['shield'] = max(0, e.get('shield',0) - blocked)
         e['hp'] -= dealt - blocked
@@ -500,7 +510,9 @@ class BattleRoom:
         p.effects = [f for f in p.effects if self.seconds - f['created'] < 1.7]
         p.raid_ready = max(0, p.raid_ready - dt)
         for u in p.units:
-            u['energy'] = min(100, u.get('energy', 0) + dt * 7 * energy_multiplier(u))
+            mods=modifiers(p,u)
+            charge=min(BONUS_CAPS['combinedEnergy'],energy_multiplier(u)*mods['energy'])
+            u['energy'] = min(100, u.get('energy', 0) + dt * 7 * charge)
             u['cooldown'] -= dt
             d = CATALOG[u['dex']]
             x, y = MAP['cells'][u['cell']]
@@ -512,24 +524,27 @@ class BattleRoom:
                              key=lambda e: e['progress'], reverse=True)
             if not targets:
                 continue
-            u['cooldown'] = region_attack_interval(u)
-            damage = attack_damage(u,p.level,special)*self.damage_bonuses().get(d['role'],1)
-            critical = random.random() < critical_chance(u)
+            u['cooldown'] = region_attack_interval(u)/mods['speed']
+            mods=modifiers(p,u,special)
+            weather=self.damage_bonuses().get(d['role'],1)
+            damage=combat_damage(p,u,special,weather);status_damage=combat_damage(p,u,special,weather,'dot')
+            critical = random.random() < min(BONUS_CAPS['crit'],critical_chance(u)+mods['crit'])
             if critical:
                 damage *= 2
+                status_damage *= 2
             if special:
                 u['energy'] = 0
                 hit = targets[:8]
             else:
-                u['energy'] = min(100, u['energy'] + 18 * energy_multiplier(u))
+                u['energy'] = min(100, u['energy'] + 18 * charge)
                 hit = targets[:3] if d['mode'] == 'ranged' and d['role'] in ('fire', 'electric', 'psychic') else targets[:1]
             for e in hit:
                 bonus = (1.25 if d['role']=='electric' and e.get('wet',0)>0 else 1) * (1.5 if e.get('expose',0)>0 else 1)
                 mode=d['ultimateMode'] if special else d['mode']
                 multiplier=effectiveness(d['role'],e.get('types',()))
-                before=max(0,e['hp'])
+                before=max(0,e['hp'])+e.get('shield',0)
                 self.hurt(e, damage * bonus * multiplier,mode)
-                dealt=before-max(0,e['hp'])
+                dealt=before-max(0,e['hp'])-e.get('shield',0)
                 p.damage+=dealt
                 if self.stage=='boss':
                     p.boss_damage+=dealt
@@ -538,9 +553,9 @@ class BattleRoom:
                     e['expose'] = 0
                 if multiplier>0:
                     burn=e.get('burnDps',0);poison=e.get('poisonBase',0)
-                    self.inflict(e, d['role'], damage*multiplier, special,mode)
-                    if d['role']=='fire' and damage*multiplier*.12>=burn:e['burnOwner']=p.slot
-                    if d['role']=='grass' and damage*multiplier*.06>=poison:e['poisonOwner']=p.slot
+                    self.inflict(e, d['role'], status_damage*multiplier, special,mode)
+                    if d['role']=='fire' and status_damage*multiplier*.12>=burn:e['burnOwner']=p.slot
+                    if d['role']=='grass' and status_damage*multiplier*.06>=poison:e['poisonOwner']=p.slot
             self.effect(p, u, 'ultimate' if special else 'attack', hit,
                         move=d['ultimate'] if special else d['move'], damage=round(damage), critical=critical)
         if not advance_enemies:return
@@ -548,7 +563,7 @@ class BattleRoom:
             self.status_tick(e,dt)
             if e['hp'] <= 0:
                 p.enemies.remove(e)
-                p.gold += (90 if e.get('bossRank') == 'boss' else 40 if e['boss'] else 7) + (40 if e.get('golden') else 0)
+                p.gold += kill_reward(p,(90 if e.get('bossRank') == 'boss' else 40 if e['boss'] else 7) + (40 if e.get('golden') else 0))
                 p.kills += 1
                 self.gain_experience(p)
                 continue
@@ -570,9 +585,9 @@ class BattleRoom:
         for key in ('burn','poison'):
             remaining=e.get(key,0)
             if remaining<=0:continue
-            before=max(0,e['hp'])
+            before=max(0,e['hp'])+e.get('shield',0)
             self.hurt(e,e.get(key+'Dps',0)*min(dt,remaining),e.get(key+'Mode'))
-            dealt=before-max(0,e['hp'])
+            dealt=before-max(0,e['hp'])-e.get('shield',0)
             owner=self.players.get(e.get(key+'Owner'))
             if owner:
                 owner.damage+=dealt
@@ -592,6 +607,7 @@ class BattleRoom:
                         'speed': self.speed, 'capacity': MAX_UNITS,
                         'difficulty': self.difficulty,'gameMode':self.game_mode,'stage':self.stage,
                         'roundPlan':self.next_plan if self.stage=='prep' else self.active_plan,
+                        'adventureEvent':self.adventure_event,
                         'stageLeft':round(self.stage_left,1),'teamHp':self.team_hp,'cleared':self.cleared,'boss':self.shared_boss,
                         'seconds': round(self.seconds, 1), 'nextWave': round(self.stage_left,1),
                         'players': [p.public(weather) for p in self.players.values()], 'result': self.result})
@@ -632,7 +648,7 @@ class BattleRoom:
 
 
 from campaign import Campaign
-class Room(Campaign,BattleRoom):
+class Room(Adventure,Campaign,BattleRoom):
     pass
 
 
