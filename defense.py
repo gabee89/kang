@@ -26,6 +26,9 @@ DEX = [
 CATALOG = {d[0]: dict(zip(('dex', 'name', 'evolution', 'role', 'tier'), d)) for d in DEX}
 for dex, data in CATALOG.items():
     data.update(profile(dex))
+    if data['tier'] == 4:
+        data['movePower'] *= 1.50
+        data['ultimatePower'] *= 1.75
     data['ultimateMode']='melee' if data['ultimate']=='몸통박치기' else 'ranged'
     data['status'] = {'fire':'화상 · 강한 지속 피해', 'electric':'마비 · 잠시 정지', 'ice':'냉기 · 이동 -65%',
                       'water':'젖음 · 전기 피해 +25% / 이동 -35%', 'grass':'중독 · 최대 3중첩', 'ghost':'저주 · 받는 피해 +15%',
@@ -404,7 +407,7 @@ class BattleRoom:
                    'armored' if self.wave >= 2 and self.spawned % 4 == 2 else
                    'shielded' if self.wave >= 3 and self.spawned % 4 == 3 else 'normal')
         growth = 1.035 ** max(0,self.wave-1)
-        hp = (65 + self.wave ** 1.65 * 14) * growth * DIFFICULTIES[self.difficulty] * (10 if boss_rank == 'boss' else 5 if boss else 1.8 if raid else 1)
+        hp = (65 + self.wave ** 1.65 * 14) * growth * DIFFICULTIES[self.difficulty] * (15 if boss_rank == 'boss' else 8 if boss else 1.8 if raid else 1)
         hp *= .7 if variant == 'runner' else 1.4 if variant == 'armored' else 1
         flank = plan['entry']=='shortcut' and not boss
         direction=plan.get('direction',1)
@@ -650,5 +653,4 @@ class BattleRoom:
 from campaign import Campaign
 class Room(Adventure,Campaign,BattleRoom):
     pass
-
 
