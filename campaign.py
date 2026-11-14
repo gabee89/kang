@@ -65,7 +65,7 @@ class Campaign:
             boss.update(progress=0,flank=False,types=('dragon','flying'),weakness=None)
             # Scale with the round and participants, never with current DPS.
             from defense import DIFFICULTIES
-            boss['hp']=boss['maxHp']=(3300+self.wave**2*33)*len(alive)*DIFFICULTIES[self.difficulty]
+            boss['hp']=boss['maxHp']=(4950+self.wave**2*49.5)*len(alive)*DIFFICULTIES[self.difficulty]
             self.shared_boss=boss
             for p in self.players.values():
                 p.boss_round_damage=0
@@ -194,5 +194,4 @@ class Campaign:
             self.winner=ranked[0].slot if len(ranked)<2 or ranked[0].score>ranked[1].score else None
         self.result.update(winner=self.winner,completed=self.completed,gameMode=self.game_mode,runId=self.run_id,
                            difficulty=self.difficulty,scores=[p.public() for p in ranked])
-
 

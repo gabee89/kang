@@ -36,8 +36,7 @@ function placement(c,player,selected,catalog){
  const group=player.units.filter(u=>u.cell===selected.cell),limit=catalog[selected.dex]?.evolution?3:2;
  c.save();c.font='bold 10px sans-serif';c.textAlign='center';
  map.cells.forEach((cell,i)=>{const [x,y]=xy(...cell),others=player.units.filter(u=>u.cell===i&&u.cell!==selected.cell),valid=!others.length||others[0].dex!==selected.dex||others.length+group.length<=limit,current=i===selected.cell;
- c.fillStyle=current?'#f7e2a04d':valid?'#b8edbf26':'#d9918c26';c.strokeStyle=current?'#ffecb5':valid?'#b8efc7aa':'#d9918c88';c.lineWidth=current?2:1;c.beginPath();c.roundRect(x-36,y-34,72,68,12);c.fill();c.stroke();c.fillStyle='#f3f5df';c.fillText(String(i+1),x,y+4);});c.restore();
+ c.fillStyle=current?'#f7e2a04d':valid?'#b8edbf26':'#d9918c26';c.strokeStyle=current?'#ffecb5':valid?'#b8efc7aa':'#d9918c88';c.lineWidth=current?2:1;c.beginPath();c.roundRect(x-36,y-34,72,68,12);c.fill();c.stroke();c.fillStyle='#f3f5df';const names={grass:'풀숲',fire:'화염',water:'호수',electric:'전기',ghost:'고스트'}; const label=(i+1)+' · '+names[map.terrain[i]]; c.font='bold 12px sans-serif'; c.strokeStyle='#142620'; c.lineWidth=3; c.strokeText(label,x,y+29); c.fillText(label,x,y+29);});c.restore();
 }
 return{init,draw,placement,xy,position,symbols,palette,get data(){return map;},get artReady(){return artReady;}};
 })();
-

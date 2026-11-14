@@ -41,13 +41,38 @@ function draw(c,time,state){
  }
  const count=mode==='off'?0:matchMedia('(max-width:900px)').matches?50:96;
  if(plan.weather==='rain'){
-  c.strokeStyle='#b4e9ffd0';c.lineWidth=1.6;for(let i=0;i<count;i++){const x=(i*97-t*70+90000)%900,y=(i*67+t*290)%580;c.beginPath();c.moveTo(x,y);c.lineTo(x-8,y+26);c.stroke();}
+  for(let i=0;i<count;i++){
+   const depth=.4+(i%5)*.15, gust=Math.sin(t*.7)*4;
+   const x=((i*97-t*(35+depth*70))%900+900)%900,y=(i*67+t*(185+depth*200))%580;
+   c.strokeStyle=i%3?'#b4e9ff80':'#def6ffc0';c.lineWidth=depth*1.65;
+   c.beginPath();c.moveTo(x,y);c.lineTo(x-(8+gust)*depth,y+24*depth);c.stroke();
+  }
+  if(count && state.stage!=='boss') map.cells.forEach((cell,i)=>{
+   if(map.terrain[i]!=='water')return;
+   const [cx,cy]=Battlefield.xy(...cell);
+   for(let j=0;j<3;j++){
+    const cycle=t*1.4+i*.37+j/3,age=cycle%1,seed=Math.floor(cycle)*17+i+j*11;
+    c.globalAlpha=.7*(1-age);c.strokeStyle='#d2f5ff';c.lineWidth=1.3;
+    c.beginPath();c.ellipse(cx+Math.sin(seed)*19,cy+Math.cos(seed)*10,2+age*13,1+age*4,0,0,Math.PI*2);c.stroke();
+   }
+  });c.globalAlpha=1;
  }else if(plan.weather==='snow'){
   c.fillStyle='#effaffaa';for(let i=0;i<count;i++){const x=(i*79+Math.sin(t+i)*19)%900,y=(i*91+t*24)%580;c.beginPath();c.arc(x,y,2.2+i%3*.8,0,Math.PI*2);c.fill();}
  }else if(plan.weather==='heat'){
   for(let i=0;i<count/2;i++){const x=(i*113+Math.sin(t+i)*15)%900,y=580-(i*83+t*32)%580;c.fillStyle=i%2?'#ffd18b99':'#ff9c5e88';c.beginPath();c.arc(x,y,1.2,0,Math.PI*2);c.fill();}
  }else if(plan.weather==='wind'){
-  c.strokeStyle='#d6e9bea0';c.lineWidth=1.5;for(let i=0;i<12;i++){const x=(i*151+t*95)%950-30,y=40+i*44+Math.sin(t+i)*12;c.beginPath();c.moveTo(x,y);c.quadraticCurveTo(x+18,y-8,x+60,y);c.stroke();}
+  const drift=t*95+22*Math.sin(t*1.5);
+  for(let i=0;i<count/4;i++){
+   const x=(i*151+drift*(.7+i%3*.22))%1020-80;
+   const y=(i*83)%550+15+Math.sin(t*2+i)*14;
+   c.save();c.translate(x,y);
+   if(i%3===0){
+    c.strokeStyle='#ebf6d17a';c.lineWidth=1.4;c.beginPath();c.moveTo(-55,6);
+    c.bezierCurveTo(-32,12,-15,-12,5,-4);c.quadraticCurveTo(18,5,8,6);c.stroke();
+   }
+   c.rotate(t*2+i);c.fillStyle=i%2?'#96bb56':'#deb873';
+   c.beginPath();c.ellipse(0,0,5+i%3,1.4+Math.abs(Math.sin(t*3+i))*2,0,0,Math.PI*2);c.fill();c.restore();
+  }
  }
  c.restore();
 }
@@ -56,4 +81,3 @@ function enter(previous,next){
 }
 return{draw,enter,setMode,label,get mode(){return mode;}};
 })();
-
