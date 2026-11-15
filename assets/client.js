@@ -50,7 +50,16 @@ function render(){
   name.textContent=(unit.form?unit.form.name+' · ':'')+d.name+(unit.enhance?' +'+unit.enhance:'');detail.textContent=(d.mode==='melee'?'근거리 · 피해 1.9배':'원거리')+' · 사거리 '+d.range+' / 필살 '+d.ultimateRange+' · '+d.status+' · ×'+unit.power;
   text.append(name,detail);card.append(img,text);$('selected').append(card);const growth=document.createElement('p');growth.className='growth-info';growth.textContent=d.lineLength===3?'3단계 육성형 · '+d.stage+'/3단계':d.lineLength===2?'2단계 완성형 · '+d.stage+'/2단계':'무진화 · 즉시 전력';$('selected').append(growth);if(unit.form)growth.textContent+=' · '+(unit.form.description||'공격 +'+Math.round((unit.form.damage-1)*100)+'% · 필살 +'+Math.round((unit.form.ultimate-1)*100)+'%');const iv=document.createElement('div');iv.className='iv-stats';iv.textContent='개체값 '+unit.ivGrade+' · 공격 '+(unit.ivs?.attack??'-')+'/31 · 특공 '+(unit.ivs?.special??'-')+'/31 · 스피드 '+(unit.ivs?.speed??'-')+'/31';$('selected').append(iv);const ivTip=document.createElement('small');ivTip.textContent='공격: 근거리 · 특공: 원거리/필살 · 스피드: 공격 간격 / 합성 시 각 항목의 최고값 계승';$('selected').append(ivTip);
   const terrain=document.createElement('p');terrain.className='muted';terrain.textContent=unit.region?unit.region.name+' · '+unit.region.description:'지역을 이동하면 버프가 바뀝니다.';$('selected').append(terrain);
-  const moves=document.createElement('div');moves.className='move-info';moves.textContent='기본 공격 ['+(d.mode==='melee'?'근거리':'원거리')+']: '+d.move+' · 피해 '+unit.attackDamage+' / '+unit.attackInterval+'초 · 필살 ['+(d.ultimateMode==='melee'?'근거리':'원거리')+']: '+d.ultimate+' · 피해 '+unit.ultimateDamage;moves.textContent=(unit.skills||[]).map(skill=>skill.name+' ['+(skill.mode==='melee'?'근접 돌진':'원거리')+' '+skill.range+'칸] '+(skill.id==='ultimate'?'게이지 100':skill.cooldown+'초')).join(' · ');const traits=(me.adventure?.synergies||[]).filter(s=>s.active&&s.roles.includes(d.role));if(traits.length)moves.textContent+=' · 시너지 '+traits.map(s=>s.name).join('/');moves.textContent+=' · 치명타 '+Math.round((unit.criticalChance||.15)*100)+'%';$('selected').append(moves);
+  const moves=document.createElement('div');moves.className='move-info';
+  for(const skill of unit.skills||[]){
+   const row=document.createElement('div');row.className='skill-row';
+   const title=document.createElement('strong');title.textContent=skill.name;
+   const damage=document.createElement('b');damage.className='skill-damage';damage.textContent='피해 '+Number(skill.damage||0).toLocaleString('ko-KR',{maximumFractionDigits:1});
+   const meta=document.createElement('small');meta.textContent=(skill.mode==='melee'?'근접':'원거리')+' · '+skill.range+'칸 · '+(skill.id==='ultimate'?'게이지 100':(skill.id==='basic'?unit.attackInterval:skill.cooldown)+'초');
+   row.append(title,damage,meta);moves.append(row);
+  }
+  const note=document.createElement('small');note.className='skill-note';note.textContent='대상 1마리 기준 · 상성/치명타 전 피해 · 치명타 '+Math.round((unit.criticalChance||.15)*100)+'%';
+  moves.append(note);$('selected').append(moves);
   const energy=document.createElement('div');energy.className='energy';const bar=document.createElement('i');bar.style.width=(unit.energy||0)+'%';energy.append(bar);$('selected').append(energy);
   const label=document.createElement('small');label.textContent='필살 게이지 '+Math.floor(unit.energy||0)+' / 100 · 적이 사거리 안에 있으면 자동 발동';$('selected').append(label);
   const count=me.units.filter(u=>mergeMatch(u,unit)).length;

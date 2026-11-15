@@ -1,0 +1,38 @@
+/* Expand the play surface while keeping the complete map and action dock visible. */
+.skill-row { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:4px 10px; padding:11px 0; border-bottom:1px solid #729c8a55; }
+.skill-row strong { font-size:14px; color:#f2fff6; }
+.skill-row .skill-damage { font-size:14px; color:#ffe29a; white-space:nowrap; }
+.skill-row small { grid-column:1/-1; font-size:12px; color:#c8e1d8; line-height:1.5; }
+.skill-note { display:block; margin-top:10px; line-height:1.6; }
+@media (min-width:1201px), (min-width:901px) and (min-height:601px) {
+ body.in-match { --desktop-dock-height:88px; }
+ body.in-match > header { display:none; }
+ body.in-match main { max-width:none; height:100dvh; padding:4px 6px calc(var(--desktop-dock-height) + 4px); }
+ body.in-match #match { gap:3px; }
+ body.in-match .match-header { gap:8px; }
+ body.in-match .game-layout { grid-template-columns:minmax(0,1fr) 310px; gap:6px; }
+ body.in-match .arena { padding:3px; }
+ body.in-match .arena-title { padding:2px 4px; }
+ body.in-match .rivals { margin-top:2px; }
+ body.in-match .roster { margin-top:0; }
+ body.in-match .battlefield-viewport { container-type:size; }
+ body.in-match #game { width:min(100cqw,155.1724cqh); height:auto; max-width:100%; max-height:100%; }
+ body.in-match .mobile-bar { padding:5px 12px; gap:3px 10px; }
+ body.in-match .mobile-actions button { min-height:40px; }
+ body.in-match aside .panel { padding:12px; }
+}
+@media (min-width:1201px), (min-width:901px) and (min-height:601px) {
+ body.in-match #match { position:relative; grid-template-rows:48px minmax(0,1fr); }
+ body.in-match .match-header { grid-row:1; }
+ body.in-match .game-layout { grid-row:2; }
+ body.in-match .round-banner { position:absolute; top:52px; right:0; width:310px; z-index:2; font-size:10px; }
+ body.in-match .scores { position:absolute; top:114px; right:0; width:310px; z-index:2; }
+ body.in-match .score { padding:5px; }
+ body.in-match .score strong { font-size:10px; }
+ body.in-match .score small { display:none; }
+ body.in-match .game-layout aside { padding-top:118px; }
+ body.in-match aside .selected { order:-1; }
+ body.in-match .growth-info, body.in-match .iv-stats, body.in-match .iv-stats + small { font-size:10px; margin:5px 0; }
+ body.in-match .selected .selection-card { margin-top:4px; }
+ body.in-match .skill-row { padding:8px 0; }
+}
