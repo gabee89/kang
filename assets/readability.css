@@ -36,3 +36,4 @@
  body.in-match .selected .selection-card { margin-top:4px; }
  body.in-match .skill-row { padding:8px 0; }
 }
+#game { aspect-ratio:900 / 580; }
