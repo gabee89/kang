@@ -121,6 +121,18 @@ def weakness_multiplier(enemy,mode):
     return (1.6 if weakness==mode else .55) if weakness in ('melee','ranged') and mode in ('melee','ranged') else 1
 
 
+def skill_damage(player, unit, skill, weather=1, key='damage'):
+    special = skill['id'] == 'ultimate'
+    damage = combat_damage(player, unit, special, weather, key)
+    data = CATALOG[unit['dex']]
+    if not special and skill['mode'] != data['mode']:
+        damage *= (1.9 if skill['mode'] == 'melee' else 1) / data['damageMultiplier']
+        old_key = 'special' if data['mode'] == 'ranged' else 'attack'
+        new_key = 'special' if skill['mode'] == 'ranged' else 'attack'
+        damage *= iv_factor(unit, new_key) / iv_factor(unit, old_key)
+    return damage * skill['multiplier']
+
+
 class Player:
     def __init__(self, slot, token, ws):
         self.slot, self.token, self.ws = slot, token, ws
@@ -156,7 +168,7 @@ class Player:
                            'ultimateDamage':round(combat_damage(self,u,True,weather.get(CATALOG[u['dex']]['role'],1)),1),
                            'attackInterval':round(region_attack_interval(u)/modifiers(self,u)['speed'],3),'ivGrade':iv_grade(u),
                            'region':region_info(u['cell']),'criticalChance':min(BONUS_CAPS['crit'],critical_chance(u)+modifiers(self,u)['crit']),
-                           'form':battle_form(u), 'skills':CATALOG[u['dex']]['skills'], 'xpNeed':experience_need(u)} for u in self.units],
+                           'form':battle_form(u), 'skills':[{**skill, 'damage':round(skill_damage(self,u,skill,weather.get(CATALOG[u['dex']]['role'],1)),1), 'readyIn':round(max(0,u.get('cooldown',0) if skill['id']=='basic' else u.get('skillTimers',{}).get(skill['id'],skill['cooldown'])),1)} for skill in CATALOG[u['dex']]['skills']], 'xpNeed':experience_need(u)} for u in self.units],
                 'enemies': [{k: v for k, v in e.items() if k not in ('burnDps','poisonDps','paraImmune')} for e in self.enemies],
                 'effects': self.effects}
 
@@ -559,16 +571,8 @@ class BattleRoom:
                 timers[chosen['id']] = chosen['cooldown']
             mods=modifiers(p,u,special)
             weather=self.damage_bonuses().get(d['role'],1)
-            damage=combat_damage(p,u,special,weather);status_damage=combat_damage(p,u,special,weather,'dot')
-            if not special and chosen['mode'] != d['mode']:
-                mode_factor = (1.9 if chosen['mode'] == 'melee' else 1) / d['damageMultiplier']
-                old_key = 'special' if d['mode'] == 'ranged' else 'attack'
-                new_key = 'special' if chosen['mode'] == 'ranged' else 'attack'
-                mode_factor *= iv_factor(u, new_key) / iv_factor(u, old_key)
-                damage *= mode_factor
-                status_damage *= mode_factor
-            damage *= chosen['multiplier']
-            status_damage *= chosen['multiplier']
+            damage = skill_damage(p,u,chosen,weather)
+            status_damage = skill_damage(p,u,chosen,weather,'dot')
             critical = random.random() < min(BONUS_CAPS['crit'],critical_chance(u)+mods['crit'])
             if critical:
                 damage *= 2

@@ -48,6 +48,19 @@ class SkillProgressionTests(unittest.TestCase):
             player.units = [unit]
             self.assertGreater(combat_damage(player, unit), 0)
 
+    def test_displayed_skill_damage_matches_combat(self):
+        room = Room('DISPLAY')
+        player = Player(1, 'test', None)
+        unit = self.unit(6, 5)
+        unit.update(cooldown=99, skillTimers={'close':0, 'ranged':99})
+        player.units = [unit]
+        shown = next(s for s in player.public()['units'][0]['skills'] if s['id']=='close')['damage']
+        room.spawn(player)
+        player.enemies[0].update(hp=100000, shield=0, types=[], weakness=None)
+        with patch.object(Room, 'enemy_position', return_value=MAP['cells'][0]), patch('defense.random.random', return_value=1):
+            room.simulate(player, .01, False)
+        self.assertAlmostEqual(player.effects[-1]['damage'], shown, delta=.6)
+
     def test_boss_cannot_skip_phase_from_a_single_attack(self):
         enemy = dict(hp=1000, maxHp=1000, shield=0, bossRank='boss', battleAge=0)
         Room.hurt(enemy, 100000)

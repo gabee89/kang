@@ -4,7 +4,7 @@ const mix=(a,b,t)=>[a[0]+(b[0]-a[0])*t,a[1]+(b[1]-a[1])*t];
 function line(c,a,b,color,width){c.strokeStyle=color;c.lineWidth=width;c.lineCap='round';c.beginPath();c.moveTo(...a);c.lineTo(...b);c.stroke();}
 function ring(c,p,r,color,width=1.5){c.strokeStyle=color;c.lineWidth=width;c.beginPath();c.arc(...p,r,0,Math.PI*2);c.stroke();}
 function fireGlyph(c,p,size,age){c.save();c.translate(...p);const paths=[[-1,-.35,1,-.35],[0,-1,0,-.1],[0,-.1,-.85,1],[0,-.1,.85,1]];for(const [color,w] of [['#e95830',7],['#ffae40',4],['#fff3ae',1.5]])for(const s of paths)line(c,[s[0]*size,s[1]*size],[s[2]*size,s[3]*size],color,w);for(let i=0;i<5;i++){const a=i*1.4+age*2;ElementFX.flame(c,Math.cos(a)*size*.7,Math.sin(a)*size*.8,3,Math.sin(age*9+i)*.3);}c.restore();}
-function draw(c,e,a,b,age){c.save();c.globalAlpha=Math.min(.85,(1-age)*2);const travel=Math.max(0,Math.min(1,(age-.08)/.55)),p=mix(a,b,travel),move=e.move;
+function draw(c,e,a,b,age){BattleSpectacle.impact(c,b,e.role,age,1.2);c.save();c.globalAlpha=Math.min(.85,(1-age)*2);const travel=Math.max(0,Math.min(1,(age-.08)/.55)),p=mix(a,b,travel),move=e.move;
 if(move==='불대문자'){
  for(let i=3;i>=1;i--){const q=mix(a,b,Math.max(0,travel-i*.045));c.globalAlpha=.13;fireGlyph(c,q,14,age);}
  c.globalAlpha=Math.min(.9,(1-age)*2);fireGlyph(c,p,19,age);
@@ -14,7 +14,7 @@ if(move==='불대문자'){
 }else if(move==='솔라빔'){
  ring(c,a,8+Math.sin(age*12)*3,'#d4f69e');if(age>.18&&age<.8){line(c,a,b,'#8dd77d',7);line(c,a,b,'#f3ffca',2);for(let i=0;i<4;i++)ElementFX.leaf(c,b[0]+Math.cos(i+age*5)*16,b[1]+Math.sin(i+age*5)*16,i,4);}
 }else if(move==='하이드로펌프'){
- line(c,a,p,'#5bbce1',9);line(c,a,p,'#c8faff',3);for(let i=0;i<3;i++)ring(c,p,5+((age+i*.2)%1)*16,'#b4eaff',1.5);
+ BattleSpectacle.water(c,a,b,age,true);
 }else if(move==='10만볼트'){
  ElementFX.bolt(c,a,b,age,3);for(let i=0;i<2;i++)ElementFX.bolt(c,b,[b[0]+(i?15:-15),b[1]-12],age,1.5);
 }else if(move==='번개'){
