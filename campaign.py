@@ -65,7 +65,7 @@ class Campaign:
             boss.update(progress=0,flank=False,types=('dragon','flying'),weakness=None)
             # Scale with the round and participants, never with current DPS.
             from defense import DIFFICULTIES
-            boss['hp']=boss['maxHp']=(4950+self.wave**2*49.5)*len(alive)*DIFFICULTIES[self.difficulty]
+            boss['hp']=boss['maxHp']=(18000+self.wave**2*110)*len(alive)*DIFFICULTIES[self.difficulty]
             self.shared_boss=boss
             for p in self.players.values():
                 p.boss_round_damage=0

@@ -27,8 +27,8 @@ MOVES = {
 
 def profile(dex):
     mode, move, ultimate, style = MOVES[dex]
-    # Adjacent melee, about two column spacings (1.05 each) for ranged units.
-    attack_range = 1.0 if mode == 'melee' else 2.1
+    # Short melee lunges reach inner placement sites; projectiles travel two cells.
+    attack_range = 1.8 if mode == 'melee' else 2.1
     power, interval = {
         '덩굴채찍':(1,.85), '잎날가르기':(1.1,1.05), '할퀴기':(.75,.65),
         '베어가르기':(1.25,1.15), '불꽃세례':(.85,.8), '몸통박치기':(1.35,1.2),
@@ -40,8 +40,22 @@ def profile(dex):
                       '눈보라':3.8,'사이코키네시스':4.5}[ultimate]
     return {'mode': mode, 'move': move, 'ultimate': ultimate, 'style': style,
             'range': attack_range,
-            'ultimateRange': attack_range,
+            'ultimateRange': 1.8 if ultimate == '몸통박치기' else 2.1,
             'damageMultiplier': 1.9 if mode == 'melee' else 1,
             'movePower':power, 'ultimatePower':ultimate_power, 'interval':interval}
 
+
+def skill_set(data):
+    """Four automatic attacks with independent reach and recovery."""
+    return [
+        dict(id='basic', name=data['move'], mode=data['mode'],
+             range=data['range'], cooldown=data['interval'], multiplier=1,
+             targets=3 if data['mode'] == 'ranged' and data['role'] in ('fire', 'electric', 'psychic') else 1),
+        dict(id='close', name='근접 연격', mode='melee', range=1.8,
+             cooldown=6, multiplier=2.2, targets=2),
+        dict(id='ranged', name='속성 탄환', mode='ranged', range=2.1,
+             cooldown=8, multiplier=2.0, targets=3),
+        dict(id='ultimate', name=data['ultimate'], mode=data['ultimateMode'],
+             range=data['ultimateRange'], cooldown=0, multiplier=1, targets=8),
+    ]
 

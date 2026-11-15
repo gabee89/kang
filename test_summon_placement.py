@@ -1,7 +1,7 @@
 import unittest
 from unittest.mock import patch
 
-from defense import Room, Player, CELL_COUNT, MAP
+from defense import CATALOG, Room, Player, CELL_COUNT, MAP
 
 
 class SummonPlacementTests(unittest.TestCase):
@@ -55,7 +55,7 @@ class SummonPlacementTests(unittest.TestCase):
 
 class ShortRangeTests(unittest.TestCase):
     def test_basic_and_ultimate_respect_adjacent_and_two_cell_boundaries(self):
-        for dex, distances in ((4, ((.99, True), (1.01, False), (1.99, False))),
+        for dex, distances in ((4, ((1.79, True), (1.81, False), (2.11, False))),
                                (25, ((.99, True), (2.09, True), (2.11, False)))):
             for energy in (0, 100):
                 for distance, hits in distances:
@@ -72,6 +72,8 @@ class ShortRangeTests(unittest.TestCase):
                         with patch.object(Room, 'position', return_value=(x + distance, y)), \
                                 patch.object(Room, 'inflict'), patch('defense.random.random', return_value=1):
                             room.simulate(player, .01, advance_enemies=False)
+                        if energy == 100:
+                            hits = distance <= CATALOG[dex]['ultimateRange']
                         self.assertEqual(enemy['hp'] < 10000, hits)
                         if energy == 100:
                             self.assertEqual(unit['energy'], 0 if hits else 100)
@@ -79,4 +81,3 @@ class ShortRangeTests(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
-
