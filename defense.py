@@ -6,7 +6,8 @@ import time
 import json
 from bisect import bisect_right
 from pathlib import Path
-from moves import profile
+from moves import profile, skill_set
+from progression import battle_form
 from individuals import roll_ivs, iv_factor, attack_interval, iv_grade
 from elements import TYPES, effectiveness
 from adventure import Adventure,new_progress,public_progress,refresh_traits,modifiers,kill_reward,BONUS_CAPS
@@ -30,6 +31,7 @@ for dex, data in CATALOG.items():
         data['movePower'] *= 1.50
         data['ultimatePower'] *= 1.75
     data['ultimateMode']='melee' if data['ultimate']=='몸통박치기' else 'ranged'
+    data['skills'] = skill_set(data)
     data['status'] = {'fire':'화상 · 강한 지속 피해', 'electric':'마비 · 잠시 정지', 'ice':'냉기 · 이동 -65%',
                       'water':'젖음 · 전기 피해 +25% / 이동 -35%', 'grass':'중독 · 최대 3중첩', 'ghost':'저주 · 받는 피해 +15%',
                       'psychic':'약점 노출 · 다음 공격 피해 +50%'}[data['role']]
@@ -109,7 +111,9 @@ def experience_need(unit):
 def combat_damage(p,u,special=False,weather=1,key='damage'):
     region=terrain_multiplier(u['dex'],u['cell'],special)
     combined=min(BONUS_CAPS['combinedDamage'],region*weather*modifiers(p,u,special)[key])
-    return attack_damage(u,p.level,special)*combined/region
+    form = battle_form(u)
+    form_bonus = form['ultimate' if special else 'damage'] if form else 1
+    return attack_damage(u,p.level,special)*combined/region*form_bonus
 
 
 def weakness_multiplier(enemy,mode):
@@ -152,7 +156,7 @@ class Player:
                            'ultimateDamage':round(combat_damage(self,u,True,weather.get(CATALOG[u['dex']]['role'],1)),1),
                            'attackInterval':round(region_attack_interval(u)/modifiers(self,u)['speed'],3),'ivGrade':iv_grade(u),
                            'region':region_info(u['cell']),'criticalChance':min(BONUS_CAPS['crit'],critical_chance(u)+modifiers(self,u)['crit']),
-                           'xpNeed':experience_need(u)} for u in self.units],
+                           'form':battle_form(u), 'skills':CATALOG[u['dex']]['skills'], 'xpNeed':experience_need(u)} for u in self.units],
                 'enemies': [{k: v for k, v in e.items() if k not in ('burnDps','poisonDps','paraImmune')} for e in self.enemies],
                 'effects': self.effects}
 
@@ -407,7 +411,7 @@ class BattleRoom:
                    'armored' if self.wave >= 2 and self.spawned % 4 == 2 else
                    'shielded' if self.wave >= 3 and self.spawned % 4 == 3 else 'normal')
         growth = 1.035 ** max(0,self.wave-1)
-        hp = (65 + self.wave ** 1.65 * 14) * growth * DIFFICULTIES[self.difficulty] * (15 if boss_rank == 'boss' else 8 if boss else 1.8 if raid else 1)
+        hp = (65 + self.wave ** 1.65 * 14) * growth * DIFFICULTIES[self.difficulty] * (15 if boss_rank == 'boss' else 16 if boss else 1.8 if raid else 1)
         hp *= .7 if variant == 'runner' else 1.4 if variant == 'armored' else 1
         flank = plan['entry']=='shortcut' and not boss
         direction=plan.get('direction',1)
@@ -478,7 +482,11 @@ class BattleRoom:
         dealt = damage * weakness_multiplier(e,mode) * (.7 if e.get('variant') == 'armored' else 1) * (1.15 if e.get('curse',0)>0 else 1) * (1.15 if e.get('exposed',0)>0 else 1)
         blocked = min(e.get('shield',0), dealt)
         e['shield'] = max(0, e.get('shield',0) - blocked)
-        e['hp'] -= dealt - blocked
+        remaining = e['hp'] - (dealt - blocked)
+        if e.get('bossRank') == 'boss' and 'battleAge' in e:
+            threshold = .70 if not e.get('shieldTriggered') else .35 if e.get('patternPhase', 1) < 3 else 0
+            remaining = max(e['maxHp'] * threshold, remaining)
+        e['hp'] = remaining
 
     @staticmethod
     def inflict(e, role, damage, special=False, mode=None):
@@ -514,23 +522,53 @@ class BattleRoom:
         p.raid_ready = max(0, p.raid_ready - dt)
         for u in p.units:
             mods=modifiers(p,u)
-            charge=min(BONUS_CAPS['combinedEnergy'],energy_multiplier(u)*mods['energy'])
+            form = battle_form(u)
+            legendary_charge = 1.25 if form and u['dex'] == 145 else 1
+            charge=min(BONUS_CAPS['combinedEnergy'],energy_multiplier(u)*mods['energy']*legendary_charge)
             u['energy'] = min(100, u.get('energy', 0) + dt * 7 * charge)
             u['cooldown'] -= dt
+            timers = u.setdefault('skillTimers', {})
+            for key in timers:
+                timers[key] = max(0, timers[key] - dt)
             d = CATALOG[u['dex']]
             x, y = MAP['cells'][u['cell']]
-            special = u['energy'] >= 100
-            if u['cooldown'] > 0 and not special:
+            available = []
+            for skill in d['skills']:
+                ready = (u['energy'] >= 100 if skill['id'] == 'ultimate' else
+                         u['cooldown'] <= 0 if skill['id'] == 'basic' else
+                         timers.get(skill['id'], skill['cooldown']) <= 0)
+                if skill['id'] not in ('basic', 'ultimate'):
+                    timers.setdefault(skill['id'], skill['cooldown'])
+                if ready:
+                    available.append(skill)
+            chosen = None
+            for skill in reversed(available):
+                targets = sorted(
+                    (e for e in p.enemies if e['hp'] > 0 and
+                     (self.stage == 'boss' or math.dist((x, y), self.enemy_position(e)) <= skill['range'])),
+                    key=lambda e: e['progress'], reverse=True)
+                if targets:
+                    chosen = skill
+                    break
+            if chosen is None:
                 continue
-            attack_range = d['ultimateRange'] if special else d['range']
-            targets = sorted((e for e in p.enemies if e['hp'] > 0 and (self.stage=='boss' or math.dist((x, y), self.enemy_position(e)) <= attack_range)),
-                             key=lambda e: e['progress'], reverse=True)
-            if not targets:
-                continue
-            u['cooldown'] = region_attack_interval(u)/mods['speed']
+            special = chosen['id'] == 'ultimate'
+            if chosen['id'] == 'basic':
+                u['cooldown'] = region_attack_interval(u)/mods['speed']
+            elif not special:
+                timers[chosen['id']] = chosen['cooldown']
             mods=modifiers(p,u,special)
             weather=self.damage_bonuses().get(d['role'],1)
             damage=combat_damage(p,u,special,weather);status_damage=combat_damage(p,u,special,weather,'dot')
+            if not special and chosen['mode'] != d['mode']:
+                mode_factor = (1.9 if chosen['mode'] == 'melee' else 1) / d['damageMultiplier']
+                old_key = 'special' if d['mode'] == 'ranged' else 'attack'
+                new_key = 'special' if chosen['mode'] == 'ranged' else 'attack'
+                mode_factor *= iv_factor(u, new_key) / iv_factor(u, old_key)
+                damage *= mode_factor
+                status_damage *= mode_factor
+            damage *= chosen['multiplier']
+            status_damage *= chosen['multiplier']
             critical = random.random() < min(BONUS_CAPS['crit'],critical_chance(u)+mods['crit'])
             if critical:
                 damage *= 2
@@ -540,10 +578,10 @@ class BattleRoom:
                 hit = targets[:8]
             else:
                 u['energy'] = min(100, u['energy'] + 18 * charge)
-                hit = targets[:3] if d['mode'] == 'ranged' and d['role'] in ('fire', 'electric', 'psychic') else targets[:1]
+                hit = targets[:chosen['targets']]
             for e in hit:
                 bonus = (1.25 if d['role']=='electric' and e.get('wet',0)>0 else 1) * (1.5 if e.get('expose',0)>0 else 1)
-                mode=d['ultimateMode'] if special else d['mode']
+                mode=chosen['mode']
                 multiplier=effectiveness(d['role'],e.get('types',()))
                 before=max(0,e['hp'])+e.get('shield',0)
                 self.hurt(e, damage * bonus * multiplier,mode)
@@ -557,10 +595,14 @@ class BattleRoom:
                 if multiplier>0:
                     burn=e.get('burnDps',0);poison=e.get('poisonBase',0)
                     self.inflict(e, d['role'], status_damage*multiplier, special,mode)
+                    if form and u['dex'] == 144:
+                        e['slow'] = max(e.get('slow', 0), 4)
+                    if form and u['dex'] == 146:
+                        e['burn'] = max(e.get('burn', 0), 7)
                     if d['role']=='fire' and status_damage*multiplier*.12>=burn:e['burnOwner']=p.slot
                     if d['role']=='grass' and status_damage*multiplier*.06>=poison:e['poisonOwner']=p.slot
             self.effect(p, u, 'ultimate' if special else 'attack', hit,
-                        move=d['ultimate'] if special else d['move'], damage=round(damage), critical=critical)
+                        move=chosen['name'], mode=chosen['mode'], skill=chosen['id'], damage=round(damage), critical=critical)
         if not advance_enemies:return
         for e in p.enemies[:]:
             self.status_tick(e,dt)

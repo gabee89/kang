@@ -215,7 +215,7 @@ class RulesTests(unittest.IsolatedAsyncioTestCase):
             r.spawn(p)
             e = p.enemies[0]
             e['hp'] = 1000
-            e['progress'] = next(i/40 for i in range(int(ROUTE_LENGTH*40)) if 1.25<math.dist(MAP['cells'][3],Room.position(i/40))<1.75)
+            e['progress'] = next(i/40 for i in range(int(ROUTE_LENGTH*40)) if 1.85<math.dist(MAP['cells'][3],Room.position(i/40))<2.05)
             e['types']=[]
             r.simulate(p, .01)
             self.assertEqual(e['hp'] < 1000, dex == 2)
@@ -261,11 +261,11 @@ class RulesTests(unittest.IsolatedAsyncioTestCase):
         r.simulate(p, .05)
         self.assertNotIn(event['id'], [f['id'] for f in p.effects])
 
-    async def test_short_ranges_require_roadside_melee_placement(self):
+    async def test_dash_reaches_inner_and_roadside_placement(self):
         nearest = lambda cell: min(math.dist(MAP['cells'][cell], Room.position(t / 40))
                                    for t in range(int(ROUTE_LENGTH * 40)))
         self.assertLess(nearest(0), CATALOG[4]['range'])
-        self.assertGreater(nearest(13), CATALOG[4]['range'])
+        self.assertLess(nearest(13), CATALOG[4]['range'])
         self.assertLess(nearest(13), CATALOG[25]['range'])
 
     async def test_swap_and_merge_evolution_preserve_unique_cells(self):
@@ -351,5 +351,4 @@ class NetworkTests(unittest.IsolatedAsyncioTestCase):
 
 if __name__ == '__main__':
     unittest.main()
-
 

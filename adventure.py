@@ -229,6 +229,14 @@ class Adventure:
     def boss_step(self,dt):
         boss=self.shared_boss
         if not boss:return
+        boss['battleAge'] = boss.get('battleAge', 0) + dt
+        boss['pulseIn'] = boss.get('pulseIn', 12) - dt
+        if boss['pulseIn'] <= 0 and boss['hp'] > 0:
+            boss['pulseIn'] = 12
+            for player in self.players.values():
+                for unit in player.units:
+                    unit['energy'] = max(0, unit.get('energy', 0) - 20)
+            self.boss_notice('pulse', '보스 충격파! 필살 게이지 -20')
         if boss['hp']>0:
             ratio=boss['hp']/boss['maxHp'];boss.setdefault('patternPhase',1)
             if ratio<=.70 and not boss.get('shieldTriggered'):
@@ -280,4 +288,3 @@ class Adventure:
     async def snapshot(self):
         for p in self.players.values():p.room_seconds=self.seconds
         await super().snapshot()
-
