@@ -657,7 +657,7 @@ class BattleRoom:
                         'difficulty': self.difficulty,'gameMode':self.game_mode,'stage':self.stage,
                         'roundPlan':self.next_plan if self.stage=='prep' else self.active_plan,
                         'adventureEvent':self.adventure_event,
-                        'stageLeft':round(self.stage_left,1),'teamHp':self.team_hp,'cleared':self.cleared,'boss':self.shared_boss,
+                        'bossIntro':round(self.boss_intro_left,2),'stageLeft':round(self.stage_left,1),'teamHp':self.team_hp,'cleared':self.cleared,'boss':self.shared_boss,
                         'seconds': round(self.seconds, 1), 'nextWave': round(self.stage_left,1),
                         'players': [p.public(weather) for p in self.players.values()], 'result': self.result})
 
@@ -699,4 +699,5 @@ class BattleRoom:
 from campaign import Campaign
 class Room(Adventure,Campaign,BattleRoom):
     pass
+
 
