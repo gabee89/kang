@@ -21,6 +21,7 @@ class Campaign:
         self.round_time=0
         self.cleared=0
         self.shared_boss=None
+        self.boss_intro_left=0
         self.transfers=[]
         self.team_hp=0
         self.run_id=secrets.token_hex(16)
@@ -58,6 +59,7 @@ class Campaign:
             if p.hp>0:
                 p.gold+=60+self.wave*3
         if self.stage=='boss':
+            self.boss_intro_left=2
             alive=[p for p in self.players.values() if p.hp>0]
             if not alive:return
             self.spawn(alive[0],boss=True,boss_rank='boss')
@@ -149,6 +151,9 @@ class Campaign:
             self.stage_left=max(0,self.stage_left-dt/self.speed)
             if self.stage_left<=1e-8:self.start_round()
         else:
+            if self.stage=='boss' and self.boss_intro_left>0 and any(p.hp>0 for p in self.players.values()):
+                self.boss_intro_left=max(0,self.boss_intro_left-dt/self.speed)
+                return
             self.seconds+=dt
             self.round_time+=dt
             self.stage_left=max(0,self.stage_left-dt)
@@ -194,4 +199,5 @@ class Campaign:
             self.winner=ranked[0].slot if len(ranked)<2 or ranked[0].score>ranked[1].score else None
         self.result.update(winner=self.winner,completed=self.completed,gameMode=self.game_mode,runId=self.run_id,
                            difficulty=self.difficulty,scores=[p.public() for p in ranked])
+
 

@@ -180,7 +180,7 @@ async def on_cleanup(app):
 
 
 async def serve_index(request):
-    return web.FileResponse(ROOT / 'index.html')
+    return web.FileResponse(ROOT / 'index.html',headers={'Cache-Control':'no-store, max-age=0'})
 
 
 async def api_leaderboard(request):
@@ -215,5 +215,6 @@ def create_app():
 if __name__ == '__main__':
     logging.basicConfig(level=logging.INFO)
     web.run_app(create_app(), host='0.0.0.0', port=int(os.environ.get('PORT', 8080)))
+
 
 
